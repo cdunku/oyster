@@ -2,5 +2,4 @@
 
 
 char *getl();
-char **tokenizer(char *str);
 
