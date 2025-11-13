@@ -10,36 +10,68 @@
 
 #define BUFFER_SIZE 64
 
-CMD_TOOLS get_cmd(const char *cmd) {
+BUILT_IN_CMD get_cmd(const char *cmd) {
   if(!cmd) { return CMD_UNKNOWN; }
 
   if(strcmp(cmd, "cd") == 0) { return CMD_CD; }
   else if(strcmp(cmd, "exit") == 0) { return CMD_EXIT; }
-
-  else if(strcmp(cmd, "ls") == 0) { return CMD_LS; }
-  else if(strcmp(cmd, "grep") == 0) { return CMD_GREP; }
-
-  else { return CMD_UNKNOWN; }
+  else { return CMD_EXTERNAL; }
 }
 
-void built_in_exec(char **argv, char **envp) { return; }
-void external_exec(char **argv, char **envp) { return; }
+void built_in_exec(BUILT_IN_CMD cmd, char **argv, char **envp) {  
+  switch (cmd) {
+    case CMD_EXIT:
+      exit(0);
+      
+    case CMD_CD:
+      if(argv[1] == NULL || 
+      strcmp(argv[1], "~") == 0) {
+        chdir(getenv("HOME"));
+        return;
+      } else if(strcmp(argv[1], ".") == 0) {
+        chdir(".");
+        return;
+      }
+      else if(strcmp(argv[1], "..") == 0) {
+        chdir("..");
+        return;
+      }
+      else {
+        chdir(argv[1]);
+        return;
+      }
+      break;
+    default:
+      fprintf(stderr, "oyster: command not found\n");
+      break;
+  }
+}
+void external_exec(char **argv, char **envp) { 
+  pid_t pid = fork();
+
+  if(pid == -1) { 
+    fprintf(stderr, "Error: failed to create process\n");
+    return;
+  }
+  if(pid == 0) {
+    execvp(argv[0], argv);
+  }
+  waitpid(pid, NULL, 0);
+}
 
 void handle_exec(char **argv, char **envp) {
   if(argv[0] == NULL) { return; }
 
-  switch(get_cmd(argv[0])) {
+  BUILT_IN_CMD cmd = get_cmd(argv[0]);
+  switch(cmd) {
     case CMD_EXIT:
     case CMD_CD:
-      built_in_exec(argv, NULL);
+      built_in_exec(cmd, argv, NULL);
       break;
-    
-    case CMD_GREP:
-    case CMD_LS:
+    case CMD_EXTERNAL:
       external_exec(argv, NULL);
       break;
 
-    case CMD_UNKNOWN:
     default:
       fprintf(stderr, "oyster: command not found\n");
       break;

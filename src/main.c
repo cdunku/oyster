@@ -43,7 +43,7 @@ int main() {
     */  
       
     handle_exec(argv, NULL);
-    if(strncmp(str,"exit", 4) == 0) {
+    if(strncmp(str,"quit", 4) == 0) {
 
       fprintf(stdout, "Exited oyster shell\n");
 

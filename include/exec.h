@@ -5,12 +5,10 @@ typedef enum {
   CMD_EXIT,
   CMD_CD,
   
-  // External commands
-  CMD_LS,
-  CMD_GREP,
+  // External commands inputted 
+  CMD_EXTERNAL,
 
-  // Unknown command inputted 
   CMD_UNKNOWN,
-} CMD_TOOLS;
+} BUILT_IN_CMD;
 
 void handle_exec(char **argv, char **envp);
