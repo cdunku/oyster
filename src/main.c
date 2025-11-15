@@ -11,7 +11,9 @@
 int main() {
   // Initialise the value we will input 
   char *str = NULL;
-  char **argv = NULL;
+  Tokenizer t;
+  t.argv = NULL;
+  t.argv_size = 0;
 
   while(1) {
     // Checks whether if str contains a string.
@@ -19,7 +21,7 @@ int main() {
     // for the next prompt the user will enter.
     // Same goes when tokenizing the prompt with argv too.
     if(str != NULL) { free(str); }
-    if(argv != NULL) { vector_free(argv, 0); }
+    if(t.argv != NULL) { vector_free(t.argv, t.argv_size); }
 
     // Prints the prompt immediately into the output stream
     if(write(STDOUT_FILENO, "$ ", 2) == -1) {
@@ -31,7 +33,9 @@ int main() {
     
     // printf("%s\n", str);
 
-    argv = tokenizer(str);
+    t = tokenizer(str);
+
+    if(t.argv ==  NULL) { continue; }
 
     /*
     size_t i = 0;
@@ -42,12 +46,12 @@ int main() {
     printf("\n");
     */  
       
-    handle_exec(argv, NULL);
+    handle_exec(t.argv, NULL);
     if(strncmp(str,"quit", 4) == 0) {
 
       fprintf(stdout, "Exited oyster shell\n");
 
-      vector_free(argv, 0);
+      vector_free(t.argv, t.argv_size);
       free(str);
       break;
     }

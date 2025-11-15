@@ -8,21 +8,28 @@
 
 #define BUFFER_SIZE 64
 
-char **tokenizer(char *str) {
+Tokenizer tokenizer(char *str) {
+  // Declare the initial buffer size for both the arguments vector and token size.
   size_t argv_size = BUFFER_SIZE; 
   size_t token_size = BUFFER_SIZE;
 
-  char *token = malloc(token_size * sizeof(char));
-  char **argv = malloc(argv_size * sizeof(char *));
+  // Declare the struct for tokenization and initialise everything needed.
+  Tokenizer t;
 
-  if(token == NULL || argv == NULL) {
+  char *token = malloc(token_size * sizeof(char));
+  t.argv = malloc(argv_size * sizeof(char *));
+  t.argv_size = 0;
+
+  if(token == NULL || t.argv == NULL) {
     fprintf(stderr, "Fatal: failed to allocate memory for tokenization\n");
     exit(EXIT_FAILURE);
   }
 
-  size_t i = 0, j = 0, k = 0;
+  size_t i = 0, j = 0;
 
+  bool double_quotes = true;
   bool in_quotes = false;
+  bool single_quotes;
   char quote = '\0';
 
   char c;
@@ -35,26 +42,29 @@ char **tokenizer(char *str) {
         case '\n':
         case '\t':
         case '\a':
-          
-          if(k > 0) {
-            token[k] = '\0';
+          // Checks whether if there are any characters inputted to the token variable,
+          // if so and if we hit a delimiter, parse the token and input it into argv.
+          if(j > 0) {
+            token[j] = '\0';
             char *tokendup = strdup(token);
             
             if(tokendup == NULL) {
-              vector_free(argv, j);
+              vector_free(t.argv, t.argv_size);
               free(token);
               fprintf(stderr, "Fatal: failed to allocate memory to prompt\n");
               exit(EXIT_FAILURE);
             }
-            argv[j++] = tokendup;
-            k = 0;
+            t.argv[t.argv_size++] = tokendup;
+            j = 0;
           }
           i++;
 
           continue;
 
         case '"':
+          double_quotes = true;
         case '\'':
+          // If we are inside " " or ' ' special rules apply.
           in_quotes = true;
           quote = c;
           i++;
@@ -63,6 +73,43 @@ char **tokenizer(char *str) {
       }
     }
     else {
+      if(double_quotes && str[i] == '\\') {
+
+        double_quotes = false; 
+
+        char ch = str[i + 1];
+        char esc_ch;
+
+        switch (ch) {
+          case 'a':  esc_ch = '\a'; break;
+          case 'b':  esc_ch = '\b'; break;
+          case 'f':  esc_ch = '\f'; break;
+          case 'n':  esc_ch = '\n'; break;
+          case 'r':  esc_ch = '\r'; break;
+          case 't':  esc_ch = '\t'; break;
+          case 'v':  esc_ch = '\v'; break;
+          case '?':  esc_ch = '\?'; break;
+          case '\\': esc_ch = '\\'; break;
+          case '\"': esc_ch = '\"'; break;
+          case '\'': esc_ch = '\''; break;
+          case '\0': esc_ch = '\0'; break;
+            break;
+          case 'x':
+            // Convert to hex
+            break;
+          // Implement for octal numbers
+
+          default:
+            esc_ch = ch;
+            break;
+        }
+
+        token[j++] = esc_ch;
+        i += 2;
+        continue;
+      } 
+      // If we are inside the quotes and the current character is equal to the initial quote,
+      // get out of the string.
       if(in_quotes && c == quote) {
         in_quotes = false;
         i++;
@@ -71,33 +118,42 @@ char **tokenizer(char *str) {
       }
     }
 
-    token[k++] = c;
+    // Write the character to the token and advance to the next character from the inputted string.
+    token[j++] = c;
     i++;
-          
-    if(k == token_size - 1) {
+         
+    // Some boundary checks and reallocation so we do not overflow the buffers.
+    if(j == token_size - 1) {
       token_size *= 2;
       char *_token = realloc(token, token_size * sizeof(char));
 
       if(_token == NULL) {
-        vector_free(argv, j);
+        vector_free(t.argv, t.argv_size);
         free(token);
-        return NULL;
+
+        t.argv = NULL;
+        t.argv_size = 0;
+        return t;
+
       }
 
       token = _token;
     } 
 
-    if(j == argv_size - 1) {
+    if(t.argv_size == argv_size - 1) {
       argv_size *= 2;
-      char **_argv = realloc(argv, argv_size * sizeof(char *));
+      char **_argv = realloc(t.argv, argv_size * sizeof(char *));
       
       if(_argv == NULL) {
-        vector_free(argv, j);
+        vector_free(t.argv, t.argv_size);
         free(token);
-        return NULL;
+
+        t.argv = NULL;
+        t.argv_size = 0;
+        return t;
       
       }
-      argv = _argv;
+      t.argv = _argv;
     }
   }
 
@@ -105,29 +161,38 @@ char **tokenizer(char *str) {
   // then the last character can be deleted and replaced by '\0'. To prevent this we want 
   // to check whether if the last token was tokenized or not.
   
-  if(k > 0) {
-    token[k] = '\0';
+  if(j > 0) {
+    token[j] = '\0';
     char *tokendup = strdup(token);
     
     if(tokendup == NULL) {
-      vector_free(argv, 0);
+      vector_free(t.argv, t.argv_size);
       free(token);
+
       fprintf(stderr, "Fatal: failed to allocate memory to last character\n");
       exit(EXIT_FAILURE);
+
     }
-    argv[j++] = tokendup;
+    t.argv[t.argv_size++] = tokendup;
   }
 
-  if(in_quotes) {
-  fprintf(stderr, "Error: missing %c quote\n", quote);
-  vector_free(argv, 0);
-  free(token);
-  return NULL;
-
-}
-
-  argv[j] = NULL;
-  free(token);
+  // If we are inside the quotes and we haven't ended the string,
+  // do not execute the command and display an error.
   
-  return argv;
+  if(in_quotes) {
+  
+    fprintf(stdout, "Error: missing %c quote\n", quote);
+  
+    vector_free(t.argv, t.argv_size);
+    free(token);
+    t.argv = NULL;
+
+    t.argv_size = 0;
+    return t;
+  }
+
+  t.argv[t.argv_size] = NULL;
+
+  free(token);
+  return t;
 }

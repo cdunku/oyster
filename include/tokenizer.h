@@ -1,3 +1,10 @@
 #pragma once
 
-char **tokenizer(char *str);
+typedef struct {
+
+  char **argv;
+  size_t argv_size;
+
+} Tokenizer;
+
+Tokenizer tokenizer(char *str);

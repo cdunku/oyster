@@ -3,10 +3,9 @@
 
 #include "helper.h"
 
-void vector_free(char **argv, size_t i) {
-  while(argv[i] != NULL) {
+void vector_free(char **argv, size_t size) {
+  for(size_t i = 0; i < size; i++) {
     free(argv[i]);
-    i++;
   }
   free(argv);
   return;
