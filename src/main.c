@@ -47,12 +47,7 @@ int main() {
 
       fprintf(stdout, "Exited oyster shell\n");
 
-      size_t token = 0;
-      while(argv[token] != 0) {
-        free(argv[token]);
-        token++;
-      }
-      free(argv);
+      vector_free(argv, 0);
       free(str);
       break;
     }

@@ -4,6 +4,14 @@ typedef enum {
   // Built-in commands 
   CMD_EXIT,
   CMD_CD,
+  CMD_ECHO,
+  CMD_PWD,
+  CMD_HISTORY,
+  CMD_TYPE,
+  CMD_ALIAS,
+  CMD_UNALIAS,
+  CMD_EXPORT,
+  CMD_HELP,
   
   // External commands inputted 
   CMD_EXTERNAL,

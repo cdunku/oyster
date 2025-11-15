@@ -15,8 +15,31 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
 
   if(strcmp(cmd, "cd") == 0) { return CMD_CD; }
   else if(strcmp(cmd, "exit") == 0) { return CMD_EXIT; }
+  else if(strcmp(cmd, "help") == 0) { return CMD_HELP; }
   else { return CMD_EXTERNAL; }
 }
+
+// Commands in functions
+
+void cmd_cd(char **argv) {
+  if(argv[1] == NULL || 
+    strcmp(argv[1], "~") == 0) {
+    chdir(getenv("HOME"));
+    return;   
+  } 
+  else if(strcmp(argv[1], ".") == 0) {
+    chdir(".");
+    return;
+  }
+  else if(strcmp(argv[1], "..") == 0) {
+    chdir("..");
+    return;
+  }
+  else {
+    chdir(argv[1]);
+    return;
+  }
+} 
 
 void built_in_exec(BUILT_IN_CMD cmd, char **argv, char **envp) {  
   switch (cmd) {
@@ -24,22 +47,21 @@ void built_in_exec(BUILT_IN_CMD cmd, char **argv, char **envp) {
       exit(0);
       
     case CMD_CD:
-      if(argv[1] == NULL || 
-      strcmp(argv[1], "~") == 0) {
-        chdir(getenv("HOME"));
-        return;
-      } else if(strcmp(argv[1], ".") == 0) {
-        chdir(".");
-        return;
-      }
-      else if(strcmp(argv[1], "..") == 0) {
-        chdir("..");
-        return;
+      cmd_cd(argv);
+      break;
+    case CMD_PWD:
+      // Linux's buffer is usualy 4096 long, while MacOS and BSDs use 1024
+      char buffer[1024];
+      if(getcwd(buffer, 1024) == NULL) {
+        perror("Unable to get PATH");
       }
       else {
-        chdir(argv[1]);
-        return;
+        printf("%s\n", buffer);
       }
+      break;
+
+    case CMD_ECHO:
+      printf("%s", argv);
       break;
     default:
       fprintf(stderr, "oyster: command not found\n");
@@ -54,9 +76,15 @@ void external_exec(char **argv, char **envp) {
     return;
   }
   if(pid == 0) {
-    execvp(argv[0], argv);
+    if(execvp(argv[0], argv) == -1) {
+      perror("Failed to execute command");
+      exit(EXIT_FAILURE);
+    }
   }
-  waitpid(pid, NULL, 0);
+  if(waitpid(pid, NULL, 0) < 0) {
+    perror("Child quit status:");
+    exit(EXIT_FAILURE);
+  }
 }
 
 void handle_exec(char **argv, char **envp) {
