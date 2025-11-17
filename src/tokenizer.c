@@ -8,7 +8,48 @@
 
 #define BUFFER_SIZE 64
 
-Tokenizer tokenizer(char *str) {
+// For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
+char parse_hex_escape(const char *str, size_t start, int *hex_digits) {
+  int val = 0;
+  int count = 0;
+
+  // Read up to two hex digits
+  for (int k = 0; k < 2; k++) {
+    char c = str[start + k];
+    int digit;
+
+    if (c >= '0' && c <= '9') { digit = c - '0'; }
+    else if (c >= 'a' && c <= 'f') { digit = c - 'a' + 10; }
+    else if (c >= 'A' && c <= 'F') { digit = c - 'A' + 10; } 
+    else { break; }
+
+    val = (val * 16) + digit;
+    count++;
+  }
+
+  *hex_digits = count;
+  return (char)val;
+}
+
+char parse_octal_escape(const char *str, size_t start, int *oct_digits) {
+  int val = 0;
+  int count = 0;
+
+  // Read up to three octal digits
+  while (count < 3) {
+    char c = str[start + count];
+    if (c < '0' || c > '7') { break; }
+
+    val = (val * 8) + (c - '0');
+    count++;
+  }
+
+  *oct_digits = count;
+  return (char)val;
+}
+
+
+Tokenizer tokenizer(const char *str) {
   // Declare the initial buffer size for both the arguments vector and token size.
   size_t argv_size = BUFFER_SIZE; 
   size_t token_size = BUFFER_SIZE;
@@ -73,39 +114,56 @@ Tokenizer tokenizer(char *str) {
       }
     }
     else {
+      // Checks whether if inside the double quotes string we encountered a '\'.
       if(double_quotes && str[i] == '\\') {
-
-        double_quotes = false; 
 
         char ch = str[i + 1];
         char esc_ch;
 
         switch (ch) {
-          case 'a':  esc_ch = '\a'; break;
-          case 'b':  esc_ch = '\b'; break;
-          case 'f':  esc_ch = '\f'; break;
-          case 'n':  esc_ch = '\n'; break;
-          case 'r':  esc_ch = '\r'; break;
-          case 't':  esc_ch = '\t'; break;
-          case 'v':  esc_ch = '\v'; break;
-          case '?':  esc_ch = '\?'; break;
-          case '\\': esc_ch = '\\'; break;
-          case '\"': esc_ch = '\"'; break;
-          case '\'': esc_ch = '\''; break;
-          case '\0': esc_ch = '\0'; break;
+          case 'a':  esc_ch = '\a'; i += 2; break;
+          case 'b':  esc_ch = '\b'; i += 2; break;
+          case 'f':  esc_ch = '\f'; i += 2; break;
+          case 'n':  esc_ch = '\n'; i += 2; break;
+          case 'r':  esc_ch = '\r'; i += 2; break;
+          case 't':  esc_ch = '\t'; i += 2; break;
+          case 'v':  esc_ch = '\v'; i += 2; break;
+          case '?':  esc_ch = '\?'; i += 2; break;
+          case '\\': esc_ch = '\\'; i += 2; break;
+          case '\"': esc_ch = '\"'; i += 2; break;
+          case '\'': esc_ch = '\''; i += 2; break;
+          // Hex format: \xhh -> E.g. \xFF or \xA9
+          case 'x': {
+            int hex_count = 0;
+            esc_ch = parse_hex_escape(str, i + 2, &hex_count);
+
+            if(hex_count > 0) { i += 2 + hex_count; }
+            else { esc_ch = 'x'; i += 2; }
+
             break;
-          case 'x':
-            // Convert to hex
+          }
+          // Octal format: \ooo -> E.g. \077 or \123
+          case '0':
+          case '1':
+          case '2':
+          case '3':
+          case '4':
+          case '5':
+          case '6':
+          case '7': { 
+            int oct_count = 0;
+            esc_ch = parse_octal_escape(str, i + 1, &oct_count);
+            i += 1 + oct_count;
             break;
-          // Implement for octal numbers
+          }
 
           default:
             esc_ch = ch;
+            i += 2;
             break;
         }
 
         token[j++] = esc_ch;
-        i += 2;
         continue;
       } 
       // If we are inside the quotes and the current character is equal to the initial quote,

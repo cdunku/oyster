@@ -7,4 +7,4 @@ typedef struct {
 
 } Tokenizer;
 
-Tokenizer tokenizer(char *str);
+Tokenizer tokenizer(const char *str);
