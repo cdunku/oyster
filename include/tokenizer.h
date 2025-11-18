@@ -3,8 +3,17 @@
 typedef struct {
 
   char **argv;
+  char *input;
+  char *output;
+  int append;
+
+} Command_Info;
+
+typedef struct {
+
+  Command_Info cmd;
   size_t argv_size;
 
-} Tokenizer;
+} Pipeline;
 
-Tokenizer tokenizer(const char *str);
+Pipeline tokenizer(const char *str);

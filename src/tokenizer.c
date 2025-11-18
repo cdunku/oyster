@@ -8,6 +8,15 @@
 
 #define BUFFER_SIZE 64
 
+void error_flush_token(Pipeline* const p, char* token) {
+
+  vector_free(p->cmd.argv, p->argv_size);
+  free(token);
+  fprintf(stderr, "Fatal: failed to allocate memory to prompt\n");
+  exit(EXIT_FAILURE);
+
+}
+
 // For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
 char parse_hex_escape(const char *str, size_t start, int *hex_digits) {
   int val = 0;
@@ -48,20 +57,19 @@ char parse_octal_escape(const char *str, size_t start, int *oct_digits) {
   return (char)val;
 }
 
-
-Tokenizer tokenizer(const char *str) {
+Pipeline tokenizer(const char *str) {
   // Declare the initial buffer size for both the arguments vector and token size.
   size_t argv_size = BUFFER_SIZE; 
   size_t token_size = BUFFER_SIZE;
 
   // Declare the struct for tokenization and initialise everything needed.
-  Tokenizer t;
+  Pipeline p;
 
   char *token = malloc(token_size * sizeof(char));
-  t.argv = malloc(argv_size * sizeof(char *));
-  t.argv_size = 0;
+  p.cmd.argv  = malloc(argv_size * sizeof(char *));
+  p.argv_size = 0;
 
-  if(token == NULL || t.argv == NULL) {
+  if(token == NULL || p.cmd.argv  == NULL) {
     fprintf(stderr, "Fatal: failed to allocate memory for tokenization\n");
     exit(EXIT_FAILURE);
   }
@@ -82,35 +90,47 @@ Tokenizer tokenizer(const char *str) {
         case ' ':
         case '\n':
         case '\t':
-        case '\a':
+        case '\a': { 
           // Checks whether if there are any characters inputted to the token variable,
           // if so and if we hit a delimiter, parse the token and input it into argv.
           if(j > 0) {
             token[j] = '\0';
             char *tokendup = strdup(token);
             
-            if(tokendup == NULL) {
-              vector_free(t.argv, t.argv_size);
-              free(token);
-              fprintf(stderr, "Fatal: failed to allocate memory to prompt\n");
-              exit(EXIT_FAILURE);
-            }
-            t.argv[t.argv_size++] = tokendup;
+            if(tokendup == NULL) { error_flush_token(&p, token); }
+            p.cmd.argv[p.argv_size++] = tokendup;
             j = 0;
           }
           i++;
+        }
 
           continue;
 
-        case '"':
-          double_quotes = true;
-        case '\'':
+        case '"': double_quotes = true;
+        case '\'': {
           // If we are inside " " or ' ' special rules apply.
           in_quotes = true;
           quote = c;
           i++;
-
           continue;
+        }
+
+        case '|':
+        case '<': {
+          if(j == 0) { fprintf(stderr, "Error: unable to redirect program flow\n"); break; }
+          
+          char *tokendup = strdup(c == '|' ? "|" : "<");
+          if(tokendup == NULL) { error_flush_token(&p, token); }
+
+          p.cmd.argv[p.argv_size++] = tokendup;
+          i++;
+          continue;
+        }
+        case '>':
+        case '2':
+        case '&': {
+          continue;
+        }
       }
     }
     else {
@@ -186,32 +206,32 @@ Tokenizer tokenizer(const char *str) {
       char *_token = realloc(token, token_size * sizeof(char));
 
       if(_token == NULL) {
-        vector_free(t.argv, t.argv_size);
+        vector_free(p.cmd.argv, p.argv_size);
         free(token);
 
-        t.argv = NULL;
-        t.argv_size = 0;
-        return t;
+        p.cmd.argv  = NULL;
+        p.argv_size = 0;
+        return p;
 
       }
 
       token = _token;
     } 
 
-    if(t.argv_size == argv_size - 1) {
+    if(p.argv_size == argv_size - 1) {
       argv_size *= 2;
-      char **_argv = realloc(t.argv, argv_size * sizeof(char *));
+      char **_argv = realloc(p.cmd.argv, argv_size * sizeof(char *));
       
       if(_argv == NULL) {
-        vector_free(t.argv, t.argv_size);
+        vector_free(p.cmd.argv, p.argv_size);
         free(token);
 
-        t.argv = NULL;
-        t.argv_size = 0;
-        return t;
+        p.cmd.argv  = NULL;
+        p.argv_size = 0;
+        return p;
       
       }
-      t.argv = _argv;
+      p.cmd.argv  = _argv;
     }
   }
 
@@ -224,14 +244,14 @@ Tokenizer tokenizer(const char *str) {
     char *tokendup = strdup(token);
     
     if(tokendup == NULL) {
-      vector_free(t.argv, t.argv_size);
+      vector_free(p.cmd.argv, p.argv_size);
       free(token);
 
       fprintf(stderr, "Fatal: failed to allocate memory to last character\n");
       exit(EXIT_FAILURE);
 
     }
-    t.argv[t.argv_size++] = tokendup;
+    p.cmd.argv[p.argv_size++] = tokendup;
   }
 
   // If we are inside the quotes and we haven't ended the string,
@@ -241,16 +261,16 @@ Tokenizer tokenizer(const char *str) {
   
     fprintf(stdout, "Error: missing %c quote\n", quote);
   
-    vector_free(t.argv, t.argv_size);
+    vector_free(p.cmd.argv, p.argv_size);
     free(token);
-    t.argv = NULL;
+    p.cmd.argv  = NULL;
 
-    t.argv_size = 0;
-    return t;
+    p.argv_size = 0;
+    return p;
   }
 
-  t.argv[t.argv_size] = NULL;
+  p.cmd.argv[p.argv_size] = NULL;
 
   free(token);
-  return t;
+  return p;
 }

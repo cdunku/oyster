@@ -11,9 +11,11 @@
 int main() {
   // Initialise the value we will input 
   char *str = NULL;
-  Tokenizer t;
-  t.argv = NULL;
-  t.argv_size = 0;
+  Pipeline p;
+  p.cmd.argv = NULL;
+  p.cmd.input = NULL;
+  p.cmd.output = NULL;
+  p.argv_size = 0;
 
   while(1) {
     // Checks whether if str contains a string.
@@ -21,7 +23,9 @@ int main() {
     // for the next prompt the user will enter.
     // Same goes when tokenizing the prompt with argv too.
     if(str != NULL) { free(str); }
-    if(t.argv != NULL) { vector_free(t.argv, t.argv_size); }
+    if(p.cmd.argv != NULL) { vector_free(p.cmd.argv, p.argv_size); }
+    if(p.cmd.input != NULL) { free(p.cmd.input); }
+    if(p.cmd.output != NULL) { free(p.cmd.output); }
 
     // Prints the prompt immediately into the output stream
     if(write(STDOUT_FILENO, "$ ", 2) == -1) {
@@ -33,9 +37,9 @@ int main() {
     
     // printf("%s\n", str);
 
-    t = tokenizer(str);
+    p = tokenizer(str);
 
-    if(t.argv ==  NULL) { continue; }
+    if(p.cmd.argv ==  NULL) { continue; }
 
     /*
     size_t i = 0;
@@ -46,12 +50,12 @@ int main() {
     printf("\n");
     */  
       
-    handle_exec(t.argv, NULL);
+    handle_exec(p.cmd.argv, NULL);
     if(strncmp(str,"quit", 4) == 0) {
 
       fprintf(stdout, "Exited oyster shell\n");
 
-      vector_free(t.argv, t.argv_size);
+      vector_free(p.cmd.argv, p.argv_size);
       free(str);
       break;
     }

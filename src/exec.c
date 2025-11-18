@@ -96,6 +96,10 @@ void handle_exec(char **argv, char **envp) {
     case CMD_CD:
       built_in_exec(cmd, argv, NULL);
       break;
+    case CMD_PIPE:
+
+      break;
+    case 
     case CMD_EXTERNAL:
       external_exec(argv, NULL);
       break;
