@@ -19,6 +19,12 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
   else { return CMD_EXTERNAL; }
 }
 
+
+
+BUILT_IN_CMD get_redirector(const char *cmd) {
+
+}
+
 // Commands in functions
 
 void cmd_cd(char **argv) {
@@ -68,6 +74,9 @@ void built_in_exec(BUILT_IN_CMD cmd, char **argv, char **envp) {
       break;
   }
 }
+
+void pipe_exec(argv[0])
+
 void external_exec(char **argv, char **envp) { 
   pid_t pid = fork();
 

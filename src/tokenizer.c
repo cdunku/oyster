@@ -274,3 +274,29 @@ Pipeline tokenizer(const char *str) {
   free(token);
   return p;
 }
+
+// Parse the argument vector into multiple parts 
+
+Pipeline parse_cmds(Pipeline p) {
+
+  size_t cmd_amount = 1;
+  size_t i = 0;
+
+  while(p.cmd.argv[i] != NULL) {
+    if(p.cmd.argv[i] == '|') { cmd_amount++; }
+    i++;
+  }
+
+  Pipeline cmd[cmd_amount];
+
+  size_t current_cmd = 0;
+  i = 0;
+
+
+  while(p.cmd.argv[i] != NULL) {
+    // Do the parsing here and declaring the cmds[n] here I will find out a way on how to do that soon;
+  }
+
+
+  return cmd;
+}
