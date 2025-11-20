@@ -8,15 +8,6 @@
 
 #define BUFFER_SIZE 64
 
-void error_flush_token(Pipeline* const p, char* token) {
-
-  vector_free(p->cmd.argv, p->argv_size);
-  free(token);
-  fprintf(stderr, "Fatal: failed to allocate memory to prompt\n");
-  exit(EXIT_FAILURE);
-
-}
-
 // For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
 char parse_hex_escape(const char *str, size_t start, int *hex_digits) {
   int val = 0;
@@ -63,13 +54,18 @@ Pipeline tokenizer(const char *str) {
   size_t token_size = BUFFER_SIZE;
 
   // Declare the struct for tokenization and initialise everything needed.
-  Pipeline p;
+  Pipeline t;
+  t.cmd = malloc(sizeof(Command_Info));
+  if(t.cmd == NULL) {
+    fprintf(stderr, "Fatal: failed to allocate command\n");
+    exit(EXIT_FAILURE);
+  }
 
   char *token = malloc(token_size * sizeof(char));
-  p.cmd.argv  = malloc(argv_size * sizeof(char *));
-  p.argv_size = 0;
+  t.cmd->argv = malloc(argv_size * sizeof(char *));
+  t.argv_size = 0;
 
-  if(token == NULL || p.cmd.argv  == NULL) {
+  if(token == NULL || t.cmd->argv  == NULL) {
     fprintf(stderr, "Fatal: failed to allocate memory for tokenization\n");
     exit(EXIT_FAILURE);
   }
@@ -97,8 +93,8 @@ Pipeline tokenizer(const char *str) {
             token[j] = '\0';
             char *tokendup = strdup(token);
             
-            if(tokendup == NULL) { error_flush_token(&p, token); }
-            p.cmd.argv[p.argv_size++] = tokendup;
+            if(tokendup == NULL) { error_flush_token(&t, token, "Fatal: failed to allocate memory to prompt"); }
+            t.cmd->argv[t.argv_size++] = tokendup;
             j = 0;
           }
           i++;
@@ -120,9 +116,9 @@ Pipeline tokenizer(const char *str) {
           if(j == 0) { fprintf(stderr, "Error: unable to redirect program flow\n"); break; }
           
           char *tokendup = strdup(c == '|' ? "|" : "<");
-          if(tokendup == NULL) { error_flush_token(&p, token); }
+          if(tokendup == NULL) { error_flush_token(&t, token, "Fatal: failed to allocate memory to prompt"); }
 
-          p.cmd.argv[p.argv_size++] = tokendup;
+          t.cmd->argv[t.argv_size++] = tokendup;
           i++;
           continue;
         }
@@ -206,32 +202,32 @@ Pipeline tokenizer(const char *str) {
       char *_token = realloc(token, token_size * sizeof(char));
 
       if(_token == NULL) {
-        vector_free(p.cmd.argv, p.argv_size);
+        vector_free(t.cmd->argv, t.argv_size);
         free(token);
 
-        p.cmd.argv  = NULL;
-        p.argv_size = 0;
-        return p;
+        t.cmd->argv  = NULL;
+        t.argv_size = 0;
+        return t;
 
       }
 
       token = _token;
     } 
 
-    if(p.argv_size == argv_size - 1) {
+    if(t.argv_size == argv_size - 1) {
       argv_size *= 2;
-      char **_argv = realloc(p.cmd.argv, argv_size * sizeof(char *));
+      char **_argv = realloc(t.cmd->argv, argv_size * sizeof(char *));
       
       if(_argv == NULL) {
-        vector_free(p.cmd.argv, p.argv_size);
+        vector_free(t.cmd->argv, t.argv_size);
         free(token);
 
-        p.cmd.argv  = NULL;
-        p.argv_size = 0;
-        return p;
+        t.cmd->argv  = NULL;
+        t.argv_size = 0;
+        return t;
       
       }
-      p.cmd.argv  = _argv;
+      t.cmd->argv  = _argv;
     }
   }
 
@@ -243,15 +239,8 @@ Pipeline tokenizer(const char *str) {
     token[j] = '\0';
     char *tokendup = strdup(token);
     
-    if(tokendup == NULL) {
-      vector_free(p.cmd.argv, p.argv_size);
-      free(token);
-
-      fprintf(stderr, "Fatal: failed to allocate memory to last character\n");
-      exit(EXIT_FAILURE);
-
-    }
-    p.cmd.argv[p.argv_size++] = tokendup;
+    if(tokendup == NULL) { error_flush_token(&t, token, "Fatal: failed to allocate memory to last character"); }
+    t.cmd->argv[t.argv_size++] = tokendup;
   }
 
   // If we are inside the quotes and we haven't ended the string,
@@ -261,42 +250,98 @@ Pipeline tokenizer(const char *str) {
   
     fprintf(stdout, "Error: missing %c quote\n", quote);
   
-    vector_free(p.cmd.argv, p.argv_size);
-    free(token);
-    p.cmd.argv  = NULL;
+    error_flush_token(&t, token, "");
+    t.cmd->argv  = NULL;
 
-    p.argv_size = 0;
-    return p;
+    t.argv_size = 0;
+    return t;
   }
 
-  p.cmd.argv[p.argv_size] = NULL;
+  t.cmd->argv[t.argv_size] = NULL;
 
   free(token);
-  return p;
+  return t;
 }
 
 // Parse the argument vector into multiple parts 
 
-Pipeline parse_cmds(Pipeline p) {
+Pipeline parse_cmd(Pipeline t) {
 
   size_t cmd_amount = 1;
   size_t i = 0;
 
-  while(p.cmd.argv[i] != NULL) {
-    if(p.cmd.argv[i] == '|') { cmd_amount++; }
+  while(t.cmd->argv[i] != NULL) {
+    if(strcmp(t.cmd->argv[i], "|") == 0) { cmd_amount++; }
     i++;
   }
 
-  Pipeline cmd[cmd_amount];
-
-  size_t current_cmd = 0;
-  i = 0;
-
-
-  while(p.cmd.argv[i] != NULL) {
-    // Do the parsing here and declaring the cmds[n] here I will find out a way on how to do that soon;
+  Pipeline pipeline;
+  pipeline.cmd_count = cmd_amount;
+  // We pass in the sizeof Command_Info (since it is the exact amount of memory we need),
+  // together with how many different commands will be parsed.
+  pipeline.cmd = calloc(pipeline.cmd_count, sizeof(Command_Info));
+  if(pipeline.cmd == NULL) {
+    error_flush_token(&pipeline, NULL, "Fatal: failed to calloc to parser");
   }
 
+  // Initialise the members inside the Command_Info for the pipeline.cmd array.
+  // Allocation will be created in the next arrays if and when needed.
+  for(size_t i = 0; i < pipeline.cmd_count; i++) {
+    pipeline.cmd[i].argv = NULL;
+    pipeline.cmd[i].input = NULL;
+    pipeline.cmd[i].output = NULL;
+    pipeline.cmd[i].append = 0;
+  }
+  
+  size_t ai = 0; // Index of one array  
+  size_t ci = 0; // cmd[] index
+  i = 0;
 
-  return cmd;
+  size_t cmd_capacity = 4;
+
+  pipeline.cmd[ci].argv = malloc(cmd_capacity * sizeof(char *));
+  if(pipeline.cmd[ci].argv == NULL) {
+    error_flush_token(&pipeline, NULL, "Fatal: failed to allocate memory to vector parsed");
+  }
+
+  while(t.cmd->argv[i] != NULL) {
+    if(strcmp(t.cmd->argv[i], "|") == 0) {
+      pipeline.cmd[ci].argv[ai] = NULL;
+      
+      ai = 0;
+      cmd_capacity = 4;
+      ci++;
+      i++;
+
+      pipeline.cmd[ci].argv = malloc(cmd_capacity * sizeof(char *));
+      if(pipeline.cmd[ci].argv == NULL) {
+        error_flush_token(&pipeline, NULL, "Fatal: failed to allocate memory to vector parsed");
+      } 
+      continue;
+    }
+
+    // If ai + 1 is equal to or greater than the cmd_capacity 
+    // (which in our case is the \0 in the array), reallocate new memory into the existing array.
+    if(ai + 1 >= cmd_capacity) {
+      cmd_capacity *= 2;
+      char **argv_ = realloc(pipeline.cmd[ci].argv, cmd_capacity * sizeof(char*));
+      
+      if(argv_ == NULL) {
+        error_flush_token(&pipeline, NULL, "Fatal: failed to reallocate memory to parsed prompt");
+      }
+
+      pipeline.cmd[ci].argv = argv_;
+    }
+
+    pipeline.cmd[ci].argv[ai] = strdup(t.cmd->argv[i]);
+    if(pipeline.cmd[ci].argv[ai] == NULL) {
+      error_flush_token(&pipeline, NULL, "Fatal: failed to allocate memory to parsed token");
+    }
+    ai++;
+    i++;
+  }
+
+  pipeline.cmd[ci].argv[ai] = NULL;
+
+  return pipeline;
 }

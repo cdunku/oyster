@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tokenizer.h"
+
 typedef enum {
   // Built-in commands 
   CMD_EXIT,
@@ -18,11 +20,12 @@ typedef enum {
   CMD_APPEND_REDIRECT,
   CMD_INPUT_REDIRECT,
   CMD_ERROR_REDIRECT,
-  CMD_BOTH_REDIRECT,
-  // External commands inputted 
+  CMD_BOTH_REDIRECT, // Redirects both the output and error stream.
+  // External commands inputted
+  CMD_IS_COMMAND,
   CMD_EXTERNAL,
 
   CMD_UNKNOWN,
 } BUILT_IN_CMD;
 
-void handle_exec(char **argv, char **envp);
+void handle_exec(Pipeline pl);

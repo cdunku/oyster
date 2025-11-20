@@ -8,57 +8,57 @@
 #include "exec.h"
 #include "helper.h"
 
-int main() {
-  // Initialise the value we will input 
+int main(void) {
   char *str = NULL;
-  Pipeline p;
-  p.cmd.argv = NULL;
-  p.cmd.input = NULL;
-  p.cmd.output = NULL;
-  p.argv_size = 0;
 
-  while(1) {
-    // Checks whether if str contains a string.
-    // If that is the case, it frees the previous prompt 
-    // for the next prompt the user will enter.
-    // Same goes when tokenizing the prompt with argv too.
-    if(str != NULL) { free(str); }
-    if(p.cmd.argv != NULL) { vector_free(p.cmd.argv, p.argv_size); }
-    if(p.cmd.input != NULL) { free(p.cmd.input); }
-    if(p.cmd.output != NULL) { free(p.cmd.output); }
+  Pipeline p = { .cmd = NULL, .argv_size = 0, .cmd_count = 0 }; // Initialize to NULL/zero
+  
+  while (1) {
+    // Clean previous iteration
+    if (str != NULL) { free(str); str = NULL; }
+    if(p.cmd != NULL) {
+      if (p.cmd->argv != NULL) {
+        vector_free(p.cmd->argv, p.argv_size);
+        p.cmd->argv = NULL;
+      }
+      if (p.cmd->input != NULL) {
+        // free(p.cmd->input);
+        p.cmd->input = NULL;
+      }
+      if (p.cmd->output != NULL) {
+        // free(p.cmd->output);
+        p.cmd->output = NULL;
+      }
+    }
 
-    // Prints the prompt immediately into the output stream
-    if(write(STDOUT_FILENO, "$ ", 2) == -1) {
-      perror("failed to write prompt");
+    free(p.cmd);
+    p.cmd = NULL;
+
+    if (write(STDOUT_FILENO, "$ ", 2) == -1) {
+      perror("write");
       exit(EXIT_FAILURE);
     }
-    
-    str = getl();
-    
-    // printf("%s\n", str);
 
-    p = tokenizer(str);
+    str = getl();  // must return malloc’d string or NULL
+    if (!str) continue;   // or break if you prefer EOF exit
 
-    if(p.cmd.argv ==  NULL) { continue; }
+    p = tokenizer(str);  // tokenizer must allocate p.cmd internally
 
-    /*
-    size_t i = 0;
-    while(argv[i] != NULL) {
-      printf("%s, ", argv[i]);
-      i++;
-    }
-    printf("\n");
-    */  
-      
-    handle_exec(p.cmd.argv, NULL);
-    if(strncmp(str,"quit", 4) == 0) {
+    if (!p.cmd || !p.cmd->argv) continue;
 
+    handle_exec(p);
+
+    if (strncmp(str, "quit", 4) == 0) {
       fprintf(stdout, "Exited oyster shell\n");
+      if(p.cmd != NULL) {
+        vector_free(p.cmd->argv, p.argv_size);
+        free(p.cmd);
+      }
 
-      vector_free(p.cmd.argv, p.argv_size);
       free(str);
       break;
     }
   }
+
   return 0;
 }
