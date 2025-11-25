@@ -3,4 +3,5 @@
 #include "tokenizer.h"
 
 void vector_free(char **argv, size_t i);
-void error_flush_token(Pipeline* const p, char* token, const char *err_msg);
+void token_list_free(Token *t);
+void command_free(Command *cmd);

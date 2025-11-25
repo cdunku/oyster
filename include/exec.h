@@ -28,4 +28,5 @@ typedef enum {
   CMD_UNKNOWN,
 } BUILT_IN_CMD;
 
-void handle_exec(Pipeline pl);
+
+void handle_exec(char **argv, char **envp);

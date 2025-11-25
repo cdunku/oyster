@@ -6,16 +6,40 @@
 #include "tokenizer.h"
 #include "helper.h"
 
-#define BUFFER_SIZE 64
+#define CAPACITY 64
+
+/* Helper functions */
+
+bool check_for_esc_ch(const char ch) {
+  switch(ch) {
+    case '\n':
+    case '\t':
+    case ' ': return true;
+    default: return false;
+  }
+  // If something goes wrong
+  return false;
+}
+
+bool check_for_quotes(const char ch, bool *double_quotes, char *quote) {
+  switch (ch) {
+    case '"': *double_quotes = true;
+    case '\'': *quote = ch; return true;
+    
+    default: return false;
+  }
+  // If something goes wrong
+  return false;
+}
 
 // For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
-char parse_hex_escape(const char *str, size_t start, int *hex_digits) {
+char parse_hex_escape(const char *str, size_t i, size_t *hex_digits) {
   int val = 0;
   int count = 0;
 
   // Read up to two hex digits
   for (int k = 0; k < 2; k++) {
-    char c = str[start + k];
+    char c = str[i + k];
     int digit;
 
     if (c >= '0' && c <= '9') { digit = c - '0'; }
@@ -31,13 +55,13 @@ char parse_hex_escape(const char *str, size_t start, int *hex_digits) {
   return (char)val;
 }
 
-char parse_octal_escape(const char *str, size_t start, int *oct_digits) {
+char parse_octal_escape(const char *str, size_t i, size_t *oct_digits) {
   int val = 0;
   int count = 0;
 
   // Read up to three octal digits
   while (count < 3) {
-    char c = str[start + count];
+    char c = str[i + count];
     if (c < '0' || c > '7') { break; }
 
     val = (val * 8) + (c - '0');
@@ -48,300 +72,223 @@ char parse_octal_escape(const char *str, size_t start, int *oct_digits) {
   return (char)val;
 }
 
-Pipeline tokenizer(const char *str) {
-  // Declare the initial buffer size for both the arguments vector and token size.
-  size_t argv_size = BUFFER_SIZE; 
-  size_t token_size = BUFFER_SIZE;
+// We check whether if there is a possibility for executing special characters.
+bool handle_double_quotes(const char *str, size_t *consumed, char *esc_ch) {
+  char c = str[0];
 
-  // Declare the struct for tokenization and initialise everything needed.
-  Pipeline t;
-  t.cmd = malloc(sizeof(Command_Info));
-  if(t.cmd == NULL) {
-    fprintf(stderr, "Fatal: failed to allocate command\n");
-    exit(EXIT_FAILURE);
-  }
+  switch (c) {
+    case 'a': *esc_ch = '\a'; *consumed = 1; return true;
+    case 'b': *esc_ch = '\b'; *consumed = 1; return true;
+    case 'f': *esc_ch = '\f'; *consumed = 1; return true;
+    case 'n': *esc_ch = '\n'; *consumed = 1; return true;
+    case 'r': *esc_ch = '\r'; *consumed = 1; return true;
+    case 't': *esc_ch = '\t'; *consumed = 1; return true;
+    case 'v': *esc_ch = '\v'; *consumed = 1; return true;
+    case '?': *esc_ch = '\?'; *consumed = 1; return true;
+    case '\\': *esc_ch = '\\'; *consumed = 1; return true;
+    case '"': *esc_ch = '"'; *consumed = 1; return true;
+    case '\'': *esc_ch = '\''; *consumed = 1; return true;
 
-  char *token = malloc(token_size * sizeof(char));
-  t.cmd->argv = malloc(argv_size * sizeof(char *));
-  t.argv_size = 0;
-
-  if(token == NULL || t.cmd->argv  == NULL) {
-    fprintf(stderr, "Fatal: failed to allocate memory for tokenization\n");
-    exit(EXIT_FAILURE);
-  }
-
-  size_t i = 0, j = 0;
-
-  bool double_quotes = true;
-  bool in_quotes = false;
-  bool single_quotes;
-  char quote = '\0';
-
-  char c;
-
-  while((c = str[i]) != '\0') {
-
-    if(!in_quotes) {
-      switch (c) { 
-        case ' ':
-        case '\n':
-        case '\t':
-        case '\a': { 
-          // Checks whether if there are any characters inputted to the token variable,
-          // if so and if we hit a delimiter, parse the token and input it into argv.
-          if(j > 0) {
-            token[j] = '\0';
-            char *tokendup = strdup(token);
-            
-            if(tokendup == NULL) { error_flush_token(&t, token, "Fatal: failed to allocate memory to prompt"); }
-            t.cmd->argv[t.argv_size++] = tokendup;
-            j = 0;
-          }
-          i++;
-        }
-
-          continue;
-
-        case '"': double_quotes = true;
-        case '\'': {
-          // If we are inside " " or ' ' special rules apply.
-          in_quotes = true;
-          quote = c;
-          i++;
-          continue;
-        }
-
-        case '|':
-        case '<': {
-          if(j == 0) { fprintf(stderr, "Error: unable to redirect program flow\n"); break; }
-          
-          char *tokendup = strdup(c == '|' ? "|" : "<");
-          if(tokendup == NULL) { error_flush_token(&t, token, "Fatal: failed to allocate memory to prompt"); }
-
-          t.cmd->argv[t.argv_size++] = tokendup;
-          i++;
-          continue;
-        }
-        case '>':
-        case '2':
-        case '&': {
-          continue;
-        }
+    case 'x': {
+      size_t hex_count = 0;
+      *esc_ch = parse_hex_escape(str + 1, 0, &hex_count);
+      if (hex_count == 0) {
+        *esc_ch = 'x';
+        *consumed = 1;
+      } else {
+        *consumed = 1 + hex_count;
       }
-    }
-    else {
-      // Checks whether if inside the double quotes string we encountered a '\'.
-      if(double_quotes && str[i] == '\\') {
-
-        char ch = str[i + 1];
-        char esc_ch;
-
-        switch (ch) {
-          case 'a':  esc_ch = '\a'; i += 2; break;
-          case 'b':  esc_ch = '\b'; i += 2; break;
-          case 'f':  esc_ch = '\f'; i += 2; break;
-          case 'n':  esc_ch = '\n'; i += 2; break;
-          case 'r':  esc_ch = '\r'; i += 2; break;
-          case 't':  esc_ch = '\t'; i += 2; break;
-          case 'v':  esc_ch = '\v'; i += 2; break;
-          case '?':  esc_ch = '\?'; i += 2; break;
-          case '\\': esc_ch = '\\'; i += 2; break;
-          case '\"': esc_ch = '\"'; i += 2; break;
-          case '\'': esc_ch = '\''; i += 2; break;
-          // Hex format: \xhh -> E.g. \xFF or \xA9
-          case 'x': {
-            int hex_count = 0;
-            esc_ch = parse_hex_escape(str, i + 2, &hex_count);
-
-            if(hex_count > 0) { i += 2 + hex_count; }
-            else { esc_ch = 'x'; i += 2; }
-
-            break;
-          }
-          // Octal format: \ooo -> E.g. \077 or \123
-          case '0':
-          case '1':
-          case '2':
-          case '3':
-          case '4':
-          case '5':
-          case '6':
-          case '7': { 
-            int oct_count = 0;
-            esc_ch = parse_octal_escape(str, i + 1, &oct_count);
-            i += 1 + oct_count;
-            break;
-          }
-
-          default:
-            esc_ch = ch;
-            i += 2;
-            break;
-        }
-
-        token[j++] = esc_ch;
-        continue;
-      } 
-      // If we are inside the quotes and the current character is equal to the initial quote,
-      // get out of the string.
-      if(in_quotes && c == quote) {
-        in_quotes = false;
-        i++;
-
-        continue;
-      }
+      return true;
     }
 
-    // Write the character to the token and advance to the next character from the inputted string.
-    token[j++] = c;
-    i++;
-         
-    // Some boundary checks and reallocation so we do not overflow the buffers.
-    if(j == token_size - 1) {
-      token_size *= 2;
-      char *_token = realloc(token, token_size * sizeof(char));
+    case '0': case '1': case '2': case '3':
+    case '4': case '5': case '6': case '7': {
+      size_t oct_count = 0;
+      *esc_ch = parse_octal_escape(str, 0, &oct_count);
+      *consumed = oct_count;
+      return true;
+    }
 
-      if(_token == NULL) {
-        vector_free(t.cmd->argv, t.argv_size);
-        free(token);
-
-        t.cmd->argv  = NULL;
-        t.argv_size = 0;
-        return t;
-
-      }
-
-      token = _token;
-    } 
-
-    if(t.argv_size == argv_size - 1) {
-      argv_size *= 2;
-      char **_argv = realloc(t.cmd->argv, argv_size * sizeof(char *));
-      
-      if(_argv == NULL) {
-        vector_free(t.cmd->argv, t.argv_size);
-        free(token);
-
-        t.cmd->argv  = NULL;
-        t.argv_size = 0;
-        return t;
-      
-      }
-      t.cmd->argv  = _argv;
+    default: {
+      *esc_ch = c;
+      *consumed = 1;
+      return true;
     }
   }
-
-  // If the last character ends with a delimiter that this function hasn't included,
-  // then the last character can be deleted and replaced by '\0'. To prevent this we want 
-  // to check whether if the last token was tokenized or not.
-  
-  if(j > 0) {
-    token[j] = '\0';
-    char *tokendup = strdup(token);
-    
-    if(tokendup == NULL) { error_flush_token(&t, token, "Fatal: failed to allocate memory to last character"); }
-    t.cmd->argv[t.argv_size++] = tokendup;
-  }
-
-  // If we are inside the quotes and we haven't ended the string,
-  // do not execute the command and display an error.
-  
-  if(in_quotes) {
-  
-    fprintf(stdout, "Error: missing %c quote\n", quote);
-  
-    error_flush_token(&t, token, "");
-    t.cmd->argv  = NULL;
-
-    t.argv_size = 0;
-    return t;
-  }
-
-  t.cmd->argv[t.argv_size] = NULL;
-
-  free(token);
-  return t;
 }
 
-// Parse the argument vector into multiple parts 
 
-Pipeline parse_cmd(Pipeline t) {
+// We create this local struct with the purpose of keeping track of the current token being tokenized.
+typedef struct TokBuf {
 
-  size_t cmd_amount = 1;
+  char *buffer;
+  size_t length;
+  size_t capacity;
+
+} TokBuf;
+
+
+// With this function we add the token from the *buffer from TokBuf to the Token struct's *content.
+// 
+// If we just used *content and check for boundaries, 
+// we would need to keep track of the size and realloc() every time.
+//
+// Additionally, finding the length of the token through end - start, 
+// where end = str + i and start = 0 in the beginning 
+// (while we would need to update start to be start = 0 after the first token).
+// would make the whole length finding unnecessarily complex.
+void token_add(TokBuf *tb, Token **head, Token **tail, TokenType type) {
+  
+  if(tb->length == 0) { return; }
+
+  Token *token = malloc(sizeof(Token));
+  if(token == NULL) {
+    fprintf(stderr, "Fatal: unable to allocate memory to token\n");
+    exit(EXIT_FAILURE);
+  }
+
+  token->content = malloc((tb->length + 1) * sizeof(char));
+  if(token->content == NULL) {
+    fprintf(stderr, "Fatal: unable to allocate memory to content\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // Copies everything from the tb->buffer to the actual token.
+  strncpy(token->content, tb->buffer, tb->length + 1);
+  token->content[tb->length] = '\0';
+  token->type = type;
+  token->next = NULL;
+
+  // *tail helps us track and append to the *head list.
+  // Don't forget that both are pointers and edit memory locations!
+  //
+  // When tail points to the same node like head,
+  // and we edit tail to point the the next token, the head also gets updated.
+  if(*tail != NULL) {
+    (*tail)->next = token;
+  }
+  else {
+    *head = token;
+  }
+  *tail = token;
+
+  tb->length = 0;
+}
+
+// Helps us add characters step-by-step into the temporary "token" *buffer.
+void append_ch(TokBuf *tb, char ch) {
+  if(tb->capacity == 0) {
+    tb->capacity = CAPACITY;
+    tb->buffer = malloc(tb->capacity * sizeof(char));
+  } 
+  else if(tb->capacity <= tb->length + 1) {
+    tb->capacity *= 2;
+    tb->buffer = realloc(tb->buffer, tb->capacity * sizeof(char));
+  }
+
+  // Sets the next index inside the buffer to '\0' just in case we encounter the end,
+  // because we do not know the exact size of the array.
+  //
+  // When we need to add a new character, we just overwrite the existing '\0' and add a new one.
+  tb->buffer[tb->length++] = ch;
+  tb->buffer[tb->length] = '\0';
+}
+
+Token *tokenizer(const char *str) {
+
+  TokBuf tb = { 0 };
+
+  Token *head = NULL;
+  Token *tail = NULL;
+
+  size_t length = strlen(str);
   size_t i = 0;
 
-  while(t.cmd->argv[i] != NULL) {
-    if(strcmp(t.cmd->argv[i], "|") == 0) { cmd_amount++; }
-    i++;
-  }
+  // Helps us keep track of quotes. 
+  bool quotes = false, double_quotes = false;
+  char save_quote = 0;
 
-  Pipeline pipeline;
-  pipeline.cmd_count = cmd_amount;
-  // We pass in the sizeof Command_Info (since it is the exact amount of memory we need),
-  // together with how many different commands will be parsed.
-  pipeline.cmd = calloc(pipeline.cmd_count, sizeof(Command_Info));
-  if(pipeline.cmd == NULL) {
-    error_flush_token(&pipeline, NULL, "Fatal: failed to calloc to parser");
-  }
+  while(length > i) {
+    char c = str[i];
 
-  // Initialise the members inside the Command_Info for the pipeline.cmd array.
-  // Allocation will be created in the next arrays if and when needed.
-  for(size_t i = 0; i < pipeline.cmd_count; i++) {
-    pipeline.cmd[i].argv = NULL;
-    pipeline.cmd[i].input = NULL;
-    pipeline.cmd[i].output = NULL;
-    pipeline.cmd[i].append = 0;
-  }
-  
-  size_t ai = 0; // Index of one array  
-  size_t ci = 0; // cmd[] index
-  i = 0;
-
-  size_t cmd_capacity = 4;
-
-  pipeline.cmd[ci].argv = malloc(cmd_capacity * sizeof(char *));
-  if(pipeline.cmd[ci].argv == NULL) {
-    error_flush_token(&pipeline, NULL, "Fatal: failed to allocate memory to vector parsed");
-  }
-
-  while(t.cmd->argv[i] != NULL) {
-    if(strcmp(t.cmd->argv[i], "|") == 0) {
-      pipeline.cmd[ci].argv[ai] = NULL;
-      
-      ai = 0;
-      cmd_capacity = 4;
-      ci++;
+    if(check_for_esc_ch(c) && !quotes) {
+      token_add(&tb, &head, &tail, STRING);
       i++;
-
-      pipeline.cmd[ci].argv = malloc(cmd_capacity * sizeof(char *));
-      if(pipeline.cmd[ci].argv == NULL) {
-        error_flush_token(&pipeline, NULL, "Fatal: failed to allocate memory to vector parsed");
-      } 
+      continue;
+    }
+   
+    // Checks whether if we have encountered a string.
+    if(check_for_quotes(c, &double_quotes, &save_quote) && !quotes) {
+      quotes = true;
+      i++;
+      continue;
+    }
+    // If we encounter a double quote ("), an escape sequence (\) and are inside quotes,
+    // check whether if we should handle special cases (escape characters).
+    if(quotes && double_quotes && str[i] == '\\') {
+      char esc_ch;
+      size_t esc_ch_size = 0;
+      if(handle_double_quotes(str + i + 1, &esc_ch_size, &esc_ch)) {
+        append_ch(&tb, esc_ch);
+        i += 1 + esc_ch_size;
+        continue;
+      }
+    }
+    // If we have reached the same quote sign, exit the string.
+    if((str[i] == save_quote) && quotes) {
+      quotes = false;
+      i++;
       continue;
     }
 
-    // If ai + 1 is equal to or greater than the cmd_capacity 
-    // (which in our case is the \0 in the array), reallocate new memory into the existing array.
-    if(ai + 1 >= cmd_capacity) {
-      cmd_capacity *= 2;
-      char **argv_ = realloc(pipeline.cmd[ci].argv, cmd_capacity * sizeof(char*));
-      
-      if(argv_ == NULL) {
-        error_flush_token(&pipeline, NULL, "Fatal: failed to reallocate memory to parsed prompt");
-      }
-
-      pipeline.cmd[ci].argv = argv_;
-    }
-
-    pipeline.cmd[ci].argv[ai] = strdup(t.cmd->argv[i]);
-    if(pipeline.cmd[ci].argv[ai] == NULL) {
-      error_flush_token(&pipeline, NULL, "Fatal: failed to allocate memory to parsed token");
-    }
-    ai++;
+    // Increment to the next index, and append the character to *buffer.
     i++;
+    append_ch(&tb, c);
   }
 
-  pipeline.cmd[ci].argv[ai] = NULL;
+  // Finally, add the last token to our linked list and return the list.
+  token_add(&tb, &head, &tail, STRING);
+  free(tb.buffer);
 
-  return pipeline;
+  return head;
+}
+
+size_t tokenized_list_size(Token *head) {
+  size_t size = 0;
+
+  while(head != NULL) {
+    size++;
+    head = head->next;
+  }
+
+  return size;
+}
+
+// We parse the commands, manage the I/O stream for each command and handle redirectors.
+Command *parse_cmds(Token *t) {
+  Command *cmd = malloc(sizeof(Command));
+  if(cmd == NULL) {
+    fprintf(stderr, "Fatal: unable to allocate memory to Command struct\n");
+    exit(EXIT_FAILURE);
+  }
+
+  size_t length = tokenized_list_size(t);
+
+  cmd->argv = malloc((length + 1) * sizeof(char *));
+  if(cmd->argv == NULL) {
+    fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // Go throught the list and copy it to the arguments vector.
+  size_t i = 0;
+  while(t != NULL) {
+    cmd->argv[i++] = strdup(t->content);
+    t = t->next;
+  }
+
+  cmd->argv[i] = NULL;
+  cmd->argc = length;
+
+  return cmd;
 }

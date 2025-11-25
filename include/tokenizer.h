@@ -1,21 +1,24 @@
 #pragma once
 
-typedef struct {
+typedef enum { STRING, OPERATOR } TokenType;
+
+typedef struct Token {
+
+  TokenType type;
+  char *content;
+  struct Token *next;
+
+} Token;
+
+typedef struct Command {
 
   char **argv;
-  char *input;
-  char *output;
-  int append;
+  size_t argc;
 
-} Command_Info;
+  struct Command *stdin_cmd;
+  struct Command *stdout_cmd;
 
-typedef struct {
+} Command;
 
-  Command_Info *cmd;
-  size_t argv_size;
-  size_t cmd_count;
-
-} Pipeline;
-
-Pipeline tokenizer(const char *str);
-Pipeline parse_cmd(Pipeline t);
+Token *tokenizer(const char *str);
+Command *parse_cmds(Token *t);
