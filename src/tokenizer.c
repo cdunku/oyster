@@ -5,6 +5,8 @@
 
 #include "tokenizer.h"
 #include "helper.h"
+#include "exec.h"
+
 
 #define CAPACITY 64
 
@@ -31,7 +33,47 @@ bool check_for_quotes(const char ch, bool *double_quotes, char *quote) {
   // If something goes wrong
   return false;
 }
+bool check_for_redirector_operator(const char *str, size_t i, char *operator) {
+  char ch = str[i];
+  switch (ch) { 
+    case '|':
+    case '<': {
+      operator[0] = ch;
+      operator[1] = '\0';
+      return true;
+    }
+    case '>': {
+      if(str[i + 1] == '>') {
+        operator[0] = '>';
+        operator[1] = '>';
+        operator[2] = '\0';
+        return true;
+      }
+      else {
+        operator[0] = '>';
+        operator[1] = '\0';
+        return true;
+      }
+    }
+    case '&':
+    case '2': {
+      if(str[i + 1] == '>') {
+        operator[0] = ch;
+        operator[1] = '>';
+        operator[2] = '\0';
+        return true;
+      }
+      else {
+        operator[0] = '\0';
+        return false;
+      }
+    }
 
+    default: return false;
+  }
+
+  return false;
+}
 // For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
 char parse_hex_escape(const char *str, size_t i, size_t *hex_digits) {
   int val = 0;
@@ -208,6 +250,8 @@ Token *tokenizer(const char *str) {
   bool quotes = false, double_quotes = false;
   char save_quote = 0;
 
+  char redirect_operator[3];
+
   while(length > i) {
     char c = str[i];
 
@@ -241,6 +285,12 @@ Token *tokenizer(const char *str) {
       continue;
     }
 
+    if(check_for_redirector_operator(str, i, redirect_operator)) {
+      token_add(&tb, &head, &tail, OPERATOR);
+      i++;
+      continue;
+    }
+
     // Increment to the next index, and append the character to *buffer.
     i++;
     append_ch(&tb, c);
@@ -253,42 +303,101 @@ Token *tokenizer(const char *str) {
   return head;
 }
 
-size_t tokenized_list_size(Token *head) {
-  size_t size = 0;
+void handle_io_operator(Command *cmd, Token *t, size_t current_cmd) {
+  if(strcmp(t->content, "|") == 0) {
+    cmd[current_cmd + 1].stdin_cmd = &cmd[current_cmd];
+    cmd[current_cmd].stdout_cmd = &cmd[current_cmd + 1];
 
-  while(head != NULL) {
-    size++;
-    head = head->next;
+    cmd[current_cmd + 1].stdout_cmd = NULL;
   }
-
-  return size;
+  else if(strcmp(t->content, "<") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '<'\n");
+      return;
+    }
+    cmd[current_cmd].file_in = strdup(t->next->content);
+  }
+  else if(strcmp(t->content, ">") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '>'\n");
+      return;
+    }
+    cmd[current_cmd + 1].file_out = strdup(t->next->content);
+  }
 }
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
 Command *parse_cmds(Token *t) {
-  Command *cmd = malloc(sizeof(Command));
+
+  size_t cmd_count = 1, current_cmd = 0;
+  Command *cmd = malloc(cmd_count * sizeof(Command));
   if(cmd == NULL) {
-    fprintf(stderr, "Fatal: unable to allocate memory to Command struct\n");
+    fprintf(stderr, "Fatal: unable to allocate memory to parse commands\n");
     exit(EXIT_FAILURE);
   }
 
-  size_t length = tokenized_list_size(t);
+  size_t argv_capacity = CAPACITY;
 
-  cmd->argv = malloc((length + 1) * sizeof(char *));
-  if(cmd->argv == NULL) {
+  cmd[current_cmd].argv = malloc(argv_capacity * sizeof(char *));
+  if(cmd[current_cmd].argv == NULL) {
     fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
     exit(EXIT_FAILURE);
   }
 
+  cmd[current_cmd].argc = 0;
+  cmd[current_cmd].stdin_cmd = NULL;
+  cmd[current_cmd].stdout_cmd = NULL;
+
+
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
-    cmd->argv[i++] = strdup(t->content);
+    if(t->type == OPERATOR) {
+      cmd[current_cmd].argv[i] = NULL;
+
+      i = 0;
+      cmd_count++;
+      Command *cmd_ = realloc(cmd, cmd_count * sizeof(Command));
+
+      if(cmd_ == NULL) {
+        fprintf(stderr, "Fatal: unable to reallocate memory to parsed command\n");
+        exit(EXIT_FAILURE);
+      }
+      cmd = cmd_;
+
+      argv_capacity = CAPACITY;
+      cmd[current_cmd + 1].argv = malloc(CAPACITY * sizeof(char *));
+      if(cmd[current_cmd + 1].argv == NULL) {
+        fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
+        exit(EXIT_FAILURE);
+      }
+
+      handle_io_operator(cmd, t, current_cmd);
+
+      current_cmd++;
+
+      cmd[current_cmd].argc = 0;
+    } else {
+      cmd[current_cmd].argv[i++] = strdup(t->content);
+      cmd[current_cmd].argc++;
+    }
+
+    if(i + 1 >= argv_capacity) {
+      argv_capacity *= 2;
+      char **argv_ = realloc(cmd[current_cmd].argv, argv_capacity * sizeof(char *));
+      if(argv_ == NULL) {
+        fprintf(stderr, "Error: unable to reallocate memory to command\n");
+        vector_free(cmd[current_cmd].argv, i);
+        exit(EXIT_FAILURE);
+      }
+      cmd[current_cmd].argv = argv_;
+    }
     t = t->next;
   }
 
-  cmd->argv[i] = NULL;
-  cmd->argc = length;
+  if(i > 0) {
+    cmd[current_cmd].argv[i] = NULL;
+  }
 
   return cmd;
 }
