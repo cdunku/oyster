@@ -322,7 +322,7 @@ void handle_io_operator(Command *cmd, Token *t, size_t current_cmd) {
       fprintf(stderr, "Syntax error: expected filename after '>'\n");
       return;
     }
-    cmd[current_cmd + 1].file_out = strdup(t->next->content);
+    cmd[current_cmd].file_out = strdup(t->next->content);
   }
 }
 
