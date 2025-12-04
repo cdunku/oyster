@@ -11,6 +11,7 @@
 
 int main(void) {
   char *str = NULL;
+  size_t total_cmd = 1;
 
   while (1) {
     if (write(STDOUT_FILENO, "$ ", 2) == -1) {
@@ -27,14 +28,14 @@ int main(void) {
       continue;
     }
 
-    Command *cmd = parse_cmds(tokens);
+    Command *cmd = parse_cmds(tokens, &total_cmd);
     if (!cmd) {
       token_list_free(tokens);
       free(str);
       continue;
     }
 
-    handle_exec(cmd->argv, NULL);
+    handle_exec(cmd, total_cmd);
 
     if (strncmp(str, "quit", 4) == 0) {
       fprintf(stdout, "Exited oyster shell\n");

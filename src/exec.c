@@ -66,34 +66,81 @@ void external_exec(char **argv) {
   waitpid(pid, NULL, 0);
 }
 
-void handle_exec(char **argv, char **envp) { 
-  BUILT_IN_CMD cmd = get_cmd(argv[0]);
-  switch (cmd) {
-    case CMD_EXIT:
-      exit(0);
-      
-    case CMD_CD:
-      cmd_cd(argv);
-      break;
-    case CMD_PWD:
-      // Linux's buffer is usualy 4096 long, while MacOS and BSDs use 1024
-      char buffer[1024];
-      if(getcwd(buffer, 1024) == NULL) {
-        perror("Unable to get PATH");
-      }
-      else {
-        printf("%s\n", buffer);
-      }
-      break;
-    case CMD_ECHO:
-      printf("%s", argv);
-      break;
+void handle_exec(Command *cmd, size_t cmd_count) {
 
-    case CMD_EXTERNAL:
-      external_exec(argv);
-      break;
-    default:
-      fprintf(stderr, "oyster: command not found\n");
-      break;
+  if(cmd_count > 1) {
+    int pipes[cmd_count - 1][2];
+    pid_t pids[cmd_count];
+
+    for(size_t i = 0; i < cmd_count - 1; i++) {
+      if(pipe(pipes[i]) == -1) {
+        fprintf(stderr, "Error: pipe failed to initialise\n");
+        return;
+      }
+    }
+
+    for(size_t i = 0; i < cmd_count; i++) {
+      pids[i] = fork();
+      if(pids[i] == -1) {
+        fprintf(stderr, "Error: failed to create process\n");
+        return;
+      }
+
+      if(pids[i] == 0) {
+
+        if(cmd[i].stdin_cmd != NULL) {
+          dup2(pipes[i - 1][0], STDIN_FILENO);
+        }
+        if(cmd[i].stdout_cmd != NULL) {
+          dup2(pipes[i][1], STDOUT_FILENO);
+        }
+
+        for(size_t j = 0; j < cmd_count - 1; j++) {    
+          close(pipes[j][0]); 
+          close(pipes[j][1]); 
+        }
+
+        execvp(cmd[i].argv[0], cmd[i].argv);
+      }
+    }
+    for(size_t j = 0; j < cmd_count - 1; j++) {    
+      close(pipes[j][0]); 
+      close(pipes[j][1]); 
+    }
+
+    for(size_t j = 0; j < cmd_count; j++) { waitpid(pids[j], NULL, 0); }
+      
+
+  }
+  else {
+    BUILT_IN_CMD current_cmd = get_cmd(cmd->argv[0]);
+    switch (current_cmd) {
+      case CMD_EXIT:
+        exit(0);
+        
+      case CMD_CD:
+        cmd_cd(cmd->argv);
+        break;
+      case CMD_PWD:
+        // Linux's buffer is usualy 4096 long, while MacOS and BSDs use 1024
+        char buffer[1024];
+        if(getcwd(buffer, 1024) == NULL) {
+          perror("Unable to get PATH");
+        }
+        else {
+          printf("%s\n", buffer);
+        }
+        break;
+      case CMD_ECHO:
+        printf("%s", cmd->argv);
+        break;
+
+      case CMD_EXTERNAL:
+        external_exec(cmd->argv);
+        break;
+      default:
+        fprintf(stderr, "oyster: command not found\n");
+        break;
+    }
   }
 }

@@ -308,6 +308,7 @@ void handle_io_operator(Command *cmd, Token *t, size_t current_cmd) {
     cmd[current_cmd + 1].stdin_cmd = &cmd[current_cmd];
     cmd[current_cmd].stdout_cmd = &cmd[current_cmd + 1];
 
+    cmd[current_cmd].stdin_cmd = NULL;
     cmd[current_cmd + 1].stdout_cmd = NULL;
   }
   else if(strcmp(t->content, "<") == 0) {
@@ -327,7 +328,7 @@ void handle_io_operator(Command *cmd, Token *t, size_t current_cmd) {
 }
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
-Command *parse_cmds(Token *t) {
+Command *parse_cmds(Token *t, size_t *total_cmd) {
 
   size_t cmd_count = 1, current_cmd = 0;
   Command *cmd = malloc(cmd_count * sizeof(Command));
@@ -352,7 +353,7 @@ Command *parse_cmds(Token *t) {
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
-    if(t->type == OPERATOR) {
+    if(t->type == OPERATOR && strcmp(t->content, "|") == 0) {
       cmd[current_cmd].argv[i] = NULL;
 
       i = 0;
@@ -377,7 +378,10 @@ Command *parse_cmds(Token *t) {
       current_cmd++;
 
       cmd[current_cmd].argc = 0;
-    } else {
+    } else if(t->type == OPERATOR && strcmp(t->content, "|") == -1) {
+      handle_io_operator(cmd, t, current_cmd);
+    }
+    else {
       cmd[current_cmd].argv[i++] = strdup(t->content);
       cmd[current_cmd].argc++;
     }
@@ -399,5 +403,6 @@ Command *parse_cmds(Token *t) {
     cmd[current_cmd].argv[i] = NULL;
   }
 
+  *total_cmd = cmd_count;
   return cmd;
 }

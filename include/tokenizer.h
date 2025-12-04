@@ -29,4 +29,4 @@ typedef struct Command {
 } Command;
 
 Token *tokenizer(const char *str);
-Command *parse_cmds(Token *t);
+Command *parse_cmds(Token *t, size_t *total_cmd);
