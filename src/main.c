@@ -40,13 +40,13 @@ int main(void) {
     if (strncmp(str, "quit", 4) == 0) {
       fprintf(stdout, "Exited oyster shell\n");
       token_list_free(tokens);
-      command_free(cmd);
+      all_commands_free(cmd, total_cmd);
       free(str);
       return 0;
     }
 
     token_list_free(tokens);   
-    command_free(cmd);         
+    all_commands_free(cmd, total_cmd);         
     free(str);
     str = NULL;
   }

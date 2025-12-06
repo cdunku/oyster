@@ -33,13 +33,14 @@ bool check_for_quotes(const char ch, bool *double_quotes, char *quote) {
   // If something goes wrong
   return false;
 }
-bool check_for_redirector_operator(const char *str, size_t i, char *operator) {
+bool check_for_redirector_operator(const char *str, size_t i, size_t *consumed, char *operator) {
   char ch = str[i];
   switch (ch) { 
     case '|':
     case '<': {
       operator[0] = ch;
       operator[1] = '\0';
+      *consumed = 0;
       return true;
     }
     case '>': {
@@ -47,11 +48,13 @@ bool check_for_redirector_operator(const char *str, size_t i, char *operator) {
         operator[0] = '>';
         operator[1] = '>';
         operator[2] = '\0';
+        *consumed = 1;
         return true;
       }
       else {
         operator[0] = '>';
         operator[1] = '\0';
+        *consumed = 0;
         return true;
       }
     }
@@ -61,6 +64,7 @@ bool check_for_redirector_operator(const char *str, size_t i, char *operator) {
         operator[0] = ch;
         operator[1] = '>';
         operator[2] = '\0';
+        *consumed = 1;
         return true;
       }
       else {
@@ -235,6 +239,20 @@ void append_ch(TokBuf *tb, char ch) {
   tb->buffer[tb->length++] = ch;
   tb->buffer[tb->length] = '\0';
 }
+void append_op(Token **head, Token **tail, char *redirect_operator, TokenType type) {
+
+  Token *operator = malloc(sizeof(Token));
+  operator->type = OPERATOR;
+  operator->content = strdup(redirect_operator);
+  operator->next = NULL;
+  if(tail != NULL) { 
+    (*tail)->next = operator; 
+  }
+  else {
+    *head = operator;
+  }
+  *tail = operator;
+}
 
 Token *tokenizer(const char *str) {
 
@@ -285,9 +303,14 @@ Token *tokenizer(const char *str) {
       continue;
     }
 
-    if(check_for_redirector_operator(str, i, redirect_operator)) {
-      token_add(&tb, &head, &tail, OPERATOR);
-      i++;
+    size_t operator_size = 0;
+    if(check_for_redirector_operator(str, i, &operator_size, redirect_operator)) {
+      
+      // Adds the command being added into the buffer into a node inside the list.
+      token_add(&tb, &head, &tail, STRING);
+      // Append the operator to the list using a node
+      append_op(&head, &tail, redirect_operator, OPERATOR);
+      i += 1 + operator_size;
       continue;
     }
 
@@ -303,20 +326,50 @@ Token *tokenizer(const char *str) {
   return head;
 }
 
-void handle_io_operator(Command *cmd, Token *t, size_t current_cmd) {
-  if(strcmp(t->content, "<") == 0) {
+
+
+Command *handle_io_operator(Command *cmd, Token *t, size_t i, size_t *cmd_count, size_t *current_cmd) {
+  if(strcmp(t->content, "|") == 0) {
+    cmd[*current_cmd].argv[i] = NULL;
+    cmd[*current_cmd].argc = i;
+    
+    (*cmd_count)++;
+    (*current_cmd)++;
+
+    Command *cmd_ = realloc(cmd, *cmd_count * sizeof(Command));
+    if(cmd_ == NULL) {
+      fprintf(stderr, "Fatal: unable to reallocate memory to parsed command\n");
+      exit(EXIT_FAILURE);
+    }
+    cmd = cmd_;
+
+    cmd[*current_cmd].argv = malloc(CAPACITY * sizeof(char *));
+    if(cmd[*current_cmd].argv == NULL) {
+      fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
+      exit(EXIT_FAILURE);
+    }
+
+    cmd[*current_cmd].argc = 0;
+    cmd[*current_cmd].file_in = NULL;
+    cmd[*current_cmd].file_out = NULL;
+
+    return cmd;
+  }
+  else if(strcmp(t->content, "<") == 0) {
     if(t->next == NULL) {
       fprintf(stderr, "Syntax error: expected filename after '<'\n");
-      return;
+      return NULL;
     }
-    cmd[current_cmd].file_in = strdup(t->next->content);
+    cmd[*current_cmd].file_in = strdup(t->next->content);
+    return cmd;
   }
   else if(strcmp(t->content, ">") == 0) {
     if(t->next == NULL) {
       fprintf(stderr, "Syntax error: expected filename after '>'\n");
-      return;
+      return NULL;
     }
-    cmd[current_cmd].file_out = strdup(t->next->content);
+    cmd[*current_cmd].file_out = strdup(t->next->content);
+    return cmd;
   }
 }
 
@@ -345,33 +398,10 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
-    if(t->type == OPERATOR && strcmp(t->content, "|") == 0) {
-      
-      cmd[current_cmd].argv[i] = NULL;
-      cmd[current_cmd].argc = i;
-      
-      i = 0;
-      cmd_count++;
-      current_cmd++;
-
-      Command *cmd_ = realloc(cmd, cmd_count * sizeof(Command));
-      if(cmd_ == NULL) {
-        fprintf(stderr, "Fatal: unable to reallocate memory to parsed command\n");
-        exit(EXIT_FAILURE);
-      }
-      cmd = cmd_;
-
+    if(t->type == OPERATOR) {
       argv_capacity = CAPACITY;
-      cmd[current_cmd].argv = malloc(CAPACITY * sizeof(char *));
-      if(cmd[current_cmd].argv == NULL) {
-        fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
-        exit(EXIT_FAILURE);
-      }
-      cmd[current_cmd].argc = 0;
-      cmd[current_cmd].file_in = NULL;
-      cmd[current_cmd].file_out = NULL;
-    } else if(t->type == OPERATOR) {
-      handle_io_operator(cmd, t, current_cmd);
+      cmd = handle_io_operator(cmd, t, i, &cmd_count, &current_cmd);
+      i = 0;
     }
     else {
       cmd[current_cmd].argv[i++] = strdup(t->content);

@@ -66,13 +66,17 @@ void external_exec(char **argv) {
   waitpid(pid, NULL, 0);
 }
 
+
+
 void handle_exec(Command *cmd, size_t cmd_count) {
 
   if(cmd_count > 1) {
-    int pipes[cmd_count - 1][2];
+    size_t number_of_pipes = cmd_count - 1;
+
+    int pipes[number_of_pipes][2];
     pid_t pids[cmd_count];
 
-    for(size_t i = 0; i < cmd_count - 1; i++) {
+    for(size_t i = 0; i < number_of_pipes; i++) {
       if(pipe(pipes[i]) == -1) {
         fprintf(stderr, "Error: pipe failed to initialise\n");
         return;
@@ -89,11 +93,17 @@ void handle_exec(Command *cmd, size_t cmd_count) {
       if(pids[i] == 0) {
 
         if (i > 0) {
-          dup2(pipes[i][0], STDIN_FILENO);
+          dup2(pipes[i - 1][0], STDIN_FILENO);
         }
         if (i < cmd_count - 1) {
-          dup2(pipes[i + 1][1], STDOUT_FILENO);
+          dup2(pipes[i][1], STDOUT_FILENO);
         }
+
+        for(size_t j = 0; j < number_of_pipes; j++) {    
+          close(pipes[j][0]);         
+          close(pipes[j][1]);   
+        }
+
         if(cmd[i].file_in != NULL) {
           freopen(cmd[i].file_in, "r", stdin);
         }
@@ -101,21 +111,18 @@ void handle_exec(Command *cmd, size_t cmd_count) {
           freopen(cmd[i].file_out, "w", stdout);
         }
 
-        for(size_t j = 0; j < cmd_count - 1; j++) {    
-          if(i != j) { close(pipes[j][0]); {}
-          if((i + 1) != j) { close(pipes[j][1]); }  
-        }
-
-        execvp(cmd[i].argv[0], cmd[i].argv);
+        if(execvp(cmd[i].argv[0], cmd[i].argv) == -1) {
+          fprintf(stderr, "Fatal: child process failed to execute command\n");
+          exit(EXIT_FAILURE);
+        };
       }
     }
-    for(size_t j = 0; j < cmd_count - 1; j++) {    
+    for(size_t j = 0; j < number_of_pipes; j++) {    
       close(pipes[j][0]); 
       close(pipes[j][1]); 
     }
 
     for(size_t j = 0; j < cmd_count; j++) { waitpid(pids[j], NULL, 0); }
-    }
   }
   else {
     BUILT_IN_CMD current_cmd = get_cmd(cmd->argv[0]);

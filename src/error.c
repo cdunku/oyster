@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "error.h"
+#include "tokenizer.h"
 
 // log.txt does not exist
 static int log = -1;
@@ -27,4 +28,14 @@ void err_mode(bool mode) {
   }
 
   dup2(log, STDERR_FILENO);
+}
+
+void debug_print_cmds(Command *cmds, size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    fprintf(stderr, "[CMD %zu]: ", i);
+    for (size_t j = 0; j < cmds[i].argc; j++) {
+      fprintf(stderr, "'%s' ", cmds[i].argv[j]);
+    }
+    fprintf(stderr, "\n");
+  }
 }
