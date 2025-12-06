@@ -304,14 +304,7 @@ Token *tokenizer(const char *str) {
 }
 
 void handle_io_operator(Command *cmd, Token *t, size_t current_cmd) {
-  if(strcmp(t->content, "|") == 0) {
-    cmd[current_cmd + 1].stdin_cmd = &cmd[current_cmd];
-    cmd[current_cmd].stdout_cmd = &cmd[current_cmd + 1];
-
-    cmd[current_cmd].stdin_cmd = NULL;
-    cmd[current_cmd + 1].stdout_cmd = NULL;
-  }
-  else if(strcmp(t->content, "<") == 0) {
+  if(strcmp(t->content, "<") == 0) {
     if(t->next == NULL) {
       fprintf(stderr, "Syntax error: expected filename after '<'\n");
       return;
@@ -346,20 +339,22 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   }
 
   cmd[current_cmd].argc = 0;
-  cmd[current_cmd].stdin_cmd = NULL;
-  cmd[current_cmd].stdout_cmd = NULL;
-
+  cmd[current_cmd].file_in = NULL;
+  cmd[current_cmd].file_out = NULL;
 
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
     if(t->type == OPERATOR && strcmp(t->content, "|") == 0) {
+      
       cmd[current_cmd].argv[i] = NULL;
-
+      cmd[current_cmd].argc = i;
+      
       i = 0;
       cmd_count++;
-      Command *cmd_ = realloc(cmd, cmd_count * sizeof(Command));
+      current_cmd++;
 
+      Command *cmd_ = realloc(cmd, cmd_count * sizeof(Command));
       if(cmd_ == NULL) {
         fprintf(stderr, "Fatal: unable to reallocate memory to parsed command\n");
         exit(EXIT_FAILURE);
@@ -367,23 +362,19 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
       cmd = cmd_;
 
       argv_capacity = CAPACITY;
-      cmd[current_cmd + 1].argv = malloc(CAPACITY * sizeof(char *));
-      if(cmd[current_cmd + 1].argv == NULL) {
+      cmd[current_cmd].argv = malloc(CAPACITY * sizeof(char *));
+      if(cmd[current_cmd].argv == NULL) {
         fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
         exit(EXIT_FAILURE);
       }
-
-      handle_io_operator(cmd, t, current_cmd);
-
-      current_cmd++;
-
       cmd[current_cmd].argc = 0;
-    } else if(t->type == OPERATOR && strcmp(t->content, "|") == -1) {
+      cmd[current_cmd].file_in = NULL;
+      cmd[current_cmd].file_out = NULL;
+    } else if(t->type == OPERATOR) {
       handle_io_operator(cmd, t, current_cmd);
     }
     else {
       cmd[current_cmd].argv[i++] = strdup(t->content);
-      cmd[current_cmd].argc++;
     }
 
     if(i + 1 >= argv_capacity) {
@@ -401,6 +392,7 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
 
   if(i > 0) {
     cmd[current_cmd].argv[i] = NULL;
+    cmd[current_cmd].argc = i;
   }
 
   *total_cmd = cmd_count;

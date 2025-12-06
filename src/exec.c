@@ -88,16 +88,22 @@ void handle_exec(Command *cmd, size_t cmd_count) {
 
       if(pids[i] == 0) {
 
-        if(cmd[i].stdin_cmd != NULL) {
-          dup2(pipes[i - 1][0], STDIN_FILENO);
+        if (i > 0) {
+          dup2(pipes[i][0], STDIN_FILENO);
         }
-        if(cmd[i].stdout_cmd != NULL) {
-          dup2(pipes[i][1], STDOUT_FILENO);
+        if (i < cmd_count - 1) {
+          dup2(pipes[i + 1][1], STDOUT_FILENO);
+        }
+        if(cmd[i].file_in != NULL) {
+          freopen(cmd[i].file_in, "r", stdin);
+        }
+        if(cmd[i].file_out != NULL) {
+          freopen(cmd[i].file_out, "w", stdout);
         }
 
         for(size_t j = 0; j < cmd_count - 1; j++) {    
-          close(pipes[j][0]); 
-          close(pipes[j][1]); 
+          if(i != j) { close(pipes[j][0]); {}
+          if((i + 1) != j) { close(pipes[j][1]); }  
         }
 
         execvp(cmd[i].argv[0], cmd[i].argv);
@@ -109,8 +115,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
     }
 
     for(size_t j = 0; j < cmd_count; j++) { waitpid(pids[j], NULL, 0); }
-      
-
+    }
   }
   else {
     BUILT_IN_CMD current_cmd = get_cmd(cmd->argv[0]);

@@ -22,10 +22,6 @@ typedef struct Command {
   char *file_out;
   bool append;
 
-  // For the pipeline
-  struct Command *stdin_cmd;
-  struct Command *stdout_cmd;
-
 } Command;
 
 Token *tokenizer(const char *str);
