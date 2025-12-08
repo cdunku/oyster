@@ -14,7 +14,7 @@ int main(void) {
   size_t total_cmd = 1;
 
   while (1) {
-    if (write(STDOUT_FILENO, "$ ", 2) == -1) {
+    if (write(STDOUT_FILENO, "$ -> ", 5) == -1) {
       perror("write");
       exit(EXIT_FAILURE);
     }
