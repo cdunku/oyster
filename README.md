@@ -35,7 +35,7 @@ It has served me as a learning tool on minimal, but functional command interpete
 - The use of wildcard expansions (`*`, `?`)
 
 ### Environment Variables (Maybe)
-- Variable expansion (**$HOME**, **$PATH**)
+- Variable expansion (`$HOME`, `$PATH`)
 
 ### Parser improvements
 - Currently there are some problems when running `|` inside a `" "` or `' '`, I will start fixing that soon.
