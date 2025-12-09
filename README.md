@@ -6,7 +6,6 @@ It has served me as a learning tool on creating a minimal, but functional comman
 
 ## Current features
 
-### Current features
 - Implemented my own `getline()` function
 - Implemented my own `tokenizer` and `command parser`
 - Support for multiple commands (`|`).
