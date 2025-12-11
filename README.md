@@ -1,12 +1,11 @@
 # Oyster Shell
 
 A simple Unix-like shell implemented in C. 
-It has served me as a learning tool on minimal, but functional command interpeter with its own tokenizer, parser, redirection process control and shell internals.
+It has served me as a learning tool on creating a minimal, but functional command interpeter with its own tokenizer, parser, redirection, process control and shell internals.
 
 
 ## Current features
 
-### Current features
 - Implemented my own `getline()` function
 - Implemented my own `tokenizer` and `command parser`
 - Support for multiple commands (`|`).
@@ -15,11 +14,11 @@ It has served me as a learning tool on minimal, but functional command interpete
 ## Upcoming features
 
 ### Redirectors and Logical Operators
-- Adding support for following redirectors: `<`, `>`, `<<`, `>>`, `&>`, `2>`
-- Adding support for following logical operators: `&&`, `||`
+- Adding support for the following redirectors: `<`, `>`, `<<`, `>>`, `&>`, `2>`
+- Adding support for the following logical operators: `&&`, `||`
   
 ### Built-in Commands with and without redirectors
-- This is currently semi-functional with built-in commands are being always executed in a child process. I am working on a fix
+- This is currently semi-functional with built-in commands being always executed in a child process. I am working on a fix.
 
 ### History + Readline
 - Interactive line editing
@@ -29,7 +28,7 @@ It has served me as a learning tool on minimal, but functional command interpete
 - Background execution (`&`)
 - `jobs` list
 - `fg`/`bg`
-- Proper process group and signal handling
+- Proper process grouping and signal handling
 
 ### Globbing
 - The use of wildcard expansions (`*`, `?`)
