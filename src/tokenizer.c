@@ -328,11 +328,12 @@ Token *tokenizer(const char *str) {
 
 
 
-Command *handle_io_operator(Command *cmd, Token *t, size_t i, size_t *cmd_count, size_t *current_cmd) {
+Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count, size_t *current_cmd) {
   if(strcmp(t->content, "|") == 0) {
-    cmd[*current_cmd].argv[i] = NULL;
-    cmd[*current_cmd].argc = i;
+    cmd[*current_cmd].argv[*i] = NULL;
+    cmd[*current_cmd].argc = *i;
     
+    *i = 0;
     (*cmd_count)++;
     (*current_cmd)++;
 
@@ -352,6 +353,7 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t i, size_t *cmd_count,
     cmd[*current_cmd].argc = 0;
     cmd[*current_cmd].file_in = NULL;
     cmd[*current_cmd].file_out = NULL;
+    cmd[*current_cmd].append = false;
 
     return cmd;
   }
@@ -361,6 +363,7 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t i, size_t *cmd_count,
       return NULL;
     }
     cmd[*current_cmd].file_in = strdup(t->next->content);
+    t = t->next;
     return cmd;
   }
   else if(strcmp(t->content, ">") == 0) {
@@ -375,6 +378,9 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t i, size_t *cmd_count,
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
 Command *parse_cmds(Token *t, size_t *total_cmd) {
+
+  // Store the head of the list for freeing memory
+  Token *head = t;
 
   size_t cmd_count = 1, current_cmd = 0;
   Command *cmd = malloc(cmd_count * sizeof(Command));
@@ -394,18 +400,36 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   cmd[current_cmd].argc = 0;
   cmd[current_cmd].file_in = NULL;
   cmd[current_cmd].file_out = NULL;
+  cmd[current_cmd].append = false;
 
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
     if(t->type == OPERATOR) {
       argv_capacity = CAPACITY;
-      cmd = handle_io_operator(cmd, t, i, &cmd_count, &current_cmd);
-      i = 0;
+      Command *_cmd = handle_io_operator(cmd, t, &i, &cmd_count, &current_cmd);
+      if(_cmd == NULL) {
+        fprintf(stderr, "Error: unable to retrieve redirect operator\n");
+        break;
+      }
+      cmd = _cmd;
+
+
+      if(strcmp(t->content, ">") == 0 ||
+         strcmp(t->content, "<") == 0 ||
+         strcmp(t->content, ">>") == 0) {
+
+        t = t->next;
+        if(t == NULL) {
+          fprintf(stderr, "Error: parser error using redirection\n");
+          break;
+        }
+        // Move one node after the redirected stream.
+        t = t->next;
+        continue;
+      }
     }
-    else {
-      cmd[current_cmd].argv[i++] = strdup(t->content);
-    }
+    cmd[current_cmd].argv[i++] = strdup(t->content);
 
     if(i + 1 >= argv_capacity) {
       argv_capacity *= 2;
@@ -413,6 +437,7 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
       if(argv_ == NULL) {
         fprintf(stderr, "Error: unable to reallocate memory to command\n");
         vector_free(cmd[current_cmd].argv, i);
+        token_list_free(head);
         exit(EXIT_FAILURE);
       }
       cmd[current_cmd].argv = argv_;
@@ -426,5 +451,7 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   }
 
   *total_cmd = cmd_count;
+
+
   return cmd;
 }

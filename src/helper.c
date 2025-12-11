@@ -33,21 +33,20 @@ void command_free(Command *cmd) {
   free(cmd);
 }
 
-// Free mutliple allocations
-void all_commands_free(Command *cmd, size_t total_cmds) {
-  if(cmd == NULL) { return; }
 
-  for(size_t i = 0; i < total_cmds; i++) {
-    if(cmd[i].argv != NULL) {
-      for(size_t j = 0; j < cmd[i].argc; j++) {
+void all_commands_free(Command *cmd, size_t total_cmds) {
+  if (cmd == NULL) { return; }
+
+  for (size_t i = 0; i < total_cmds; i++) {
+    if (cmd[i].argv) {
+      for (size_t j = 0; j < cmd[i].argc; j++) {
         free(cmd[i].argv[j]);
       }
       free(cmd[i].argv);
     }
-    
-    cmd->argc = 0;
-    if(cmd[i].file_in != NULL) { free(cmd[i].file_in); }
-    if(cmd[i].file_out != NULL) { free(cmd[i].file_out); }
-  }  
-  free(cmd);
+    if (cmd[i].file_in) free(cmd[i].file_in);
+    if (cmd[i].file_out) free(cmd[i].file_out);
+    cmd[i].append = false;
+  }
+  free(cmd); // free array of commands
 }

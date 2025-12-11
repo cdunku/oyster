@@ -3,11 +3,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
-
+#include <fcntl.h>
 
 #include "exec.h"
 #include "tokenizer.h" 
 #include "helper.h"
+#include "error.h"
 
 #define BUFFER_SIZE 64
 
@@ -17,19 +18,45 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
   if(strcmp(cmd, "cd") == 0) { return CMD_CD; }
   else if(strcmp(cmd, "exit") == 0) { return CMD_EXIT; }
   else if(strcmp(cmd, "help") == 0) { return CMD_HELP; }
+  else if(strcmp(cmd, "echo") == 0) { return CMD_ECHO; }
   else { return CMD_EXTERNAL; }
 }
 
-BUILT_IN_CMD get_redirector(const char *cmd) {
+BUILT_IN_CMD get_redirector(Command *cmd, size_t i) {
   if(cmd == NULL) { return CMD_UNKNOWN; }
 
-  if(strcmp(cmd, "|") == 0) { return CMD_PIPE_REDIRECT; }
-  else if(strcmp(cmd, ">") == 0) { return CMD_OUTPUT_REDIRECT; }
-  else if(strcmp(cmd, "<") == 0) { return CMD_INPUT_REDIRECT; }
-  else if(strcmp(cmd, ">>") == 0) { return CMD_APPEND_REDIRECT; }
-  else if(strcmp(cmd, "2>") == 0) { return CMD_ERROR_REDIRECT; }
-  else if(strcmp(cmd, "&>") == 0) { return CMD_BOTH_REDIRECT; }
+  if(cmd[i].file_out != NULL) { return CMD_OUTPUT_REDIRECT; }
+  else if(cmd[i].file_in != NULL) { return CMD_INPUT_REDIRECT; }
+  else if(cmd[i].append != 0) { return CMD_APPEND_REDIRECT; }
+
   else { return CMD_IS_COMMAND; }
+}
+
+void redirect_io(Command *cmd, size_t i) {
+  Command *cmd_ = &cmd[i];
+
+  if(cmd_->file_in != NULL){
+    int fd = open(cmd_->file_in, O_RDONLY);
+    if(fd < 0) {
+      fprintf(stderr, "Error: unable to read from %s\n", cmd_->file_in);
+      return;
+    }
+    dup2(fd, STDIN_FILENO);
+    close(fd);
+  }
+  if(cmd_->file_out != NULL){
+    int fd; 
+    int ff = cmd_->append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+                                 (O_WRONLY | O_CREAT | O_TRUNC);
+    fd = open(cmd_->file_out, ff, 0644);
+    if(fd < 0) {
+      fprintf(stderr, "Error: unable to write to %s\n", cmd_->file_out);
+      return;
+    }
+    fflush(stdout);
+    dup2(fd, STDOUT_FILENO);
+    close(fd);
+  }
 }
 
 // Commands in functions
@@ -54,18 +81,45 @@ void cmd_cd(char **argv) {
   }
 } 
 
-void external_exec(char **argv) {
-  pid_t pid = fork();
-
-  if(pid == -1) {
-    return;
+void built_in_cmd(Command *cmd) {
+ 
+  BUILT_IN_CMD current_cmd = get_cmd(cmd->argv[0]);
+  
+  switch (current_cmd) {
+    case CMD_EXIT:
+      exit(0);
+      
+    case CMD_CD:
+      cmd_cd(cmd->argv);
+      break;
+    case CMD_PWD:
+      // Linux's buffer is usualy 4096 long, while MacOS and BSDs use 1024
+      char buffer[1024];
+      if(getcwd(buffer, 1024) == NULL) {
+        perror("Unable to get PATH");
+      }
+      else {
+        printf("%s\n", buffer);
+      }
+      break;
+    case CMD_ECHO:
+      size_t i = 1;
+      while(i < cmd->argc) {
+        if (i > 1) { // Print space only before the second and subsequent arguments
+          
+          fprintf(stdout, " ");
+        }
+        fprintf(stdout, "%s", cmd->argv[i]);
+        i++;
+      }
+      printf("\n");
+      fflush(stdout);
+      break;
+    default:
+      fprintf(stderr, "oyster: command not found\n");
+      break;
   }
-
-  if(pid == 0) { execvp(argv[0], argv); }
-
-  waitpid(pid, NULL, 0);
 }
-
 
 
 void handle_exec(Command *cmd, size_t cmd_count) {
@@ -79,6 +133,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
     for(size_t i = 0; i < number_of_pipes; i++) {
       if(pipe(pipes[i]) == -1) {
         fprintf(stderr, "Error: pipe failed to initialise\n");
+        all_commands_free(cmd, cmd_count);
         return;
       }
     }
@@ -87,6 +142,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
       pids[i] = fork();
       if(pids[i] == -1) {
         fprintf(stderr, "Error: failed to create process\n");
+        all_commands_free(cmd, cmd_count);
         return;
       }
 
@@ -104,12 +160,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
           close(pipes[j][1]);   
         }
 
-        if(cmd[i].file_in != NULL) {
-          freopen(cmd[i].file_in, "r", stdin);
-        }
-        if(cmd[i].file_out != NULL) {
-          freopen(cmd[i].file_out, "w", stdout);
-        }
+        if(cmd->file_in != NULL || cmd->file_out != NULL || cmd->append == true) { redirect_io(cmd, i); }
 
         if(execvp(cmd[i].argv[0], cmd[i].argv) == -1) {
           fprintf(stderr, "Fatal: child process failed to execute command\n");
@@ -125,34 +176,49 @@ void handle_exec(Command *cmd, size_t cmd_count) {
     for(size_t j = 0; j < cmd_count; j++) { waitpid(pids[j], NULL, 0); }
   }
   else {
-    BUILT_IN_CMD current_cmd = get_cmd(cmd->argv[0]);
-    switch (current_cmd) {
-      case CMD_EXIT:
-        exit(0);
-        
-      case CMD_CD:
-        cmd_cd(cmd->argv);
-        break;
-      case CMD_PWD:
-        // Linux's buffer is usualy 4096 long, while MacOS and BSDs use 1024
-        char buffer[1024];
-        if(getcwd(buffer, 1024) == NULL) {
-          perror("Unable to get PATH");
+    BUILT_IN_CMD command = get_cmd(cmd[0].argv[0]);
+
+    if(command == CMD_EXTERNAL && cmd[0].file_in == NULL && cmd[0].file_out == NULL && cmd[0].append == false) {
+      pid_t pid = fork();
+
+      if(pid == -1) {
+        fprintf(stderr, "Fatal: child process failed to execute command\n");
+        exit(EXIT_FAILURE);
+      }
+      if(pid == 0) {
+        execvp(cmd[0].argv[0], cmd[0].argv);
+        fprintf(stderr, "Fatal: unable to execute command\n");
+        exit(EXIT_FAILURE);
+      }
+
+      waitpid(pid, NULL, 0);
+    }
+    else if(cmd[0].file_in != NULL || cmd[0].file_out != NULL || cmd[0].append == true) {
+      pid_t pid = fork();
+      if(pid == -1) {
+        fprintf(stderr, "Fatal: child process failed to execute command\n");
+        exit(EXIT_FAILURE);
+      }
+      if(pid == 0) {
+        redirect_io(cmd, 0);
+        if(command == CMD_EXTERNAL) {
+          debug_print_cmds(cmd, 1);
+          execvp(cmd[0].argv[0], cmd[0].argv);
+          fprintf(stderr, "Fatal: unable to execute command\n");
+          exit(EXIT_FAILURE);
         }
         else {
-          printf("%s\n", buffer);
+          debug_print_cmds(cmd, 1);
+          built_in_cmd(&cmd[0]);
+          exit(EXIT_SUCCESS);
         }
-        break;
-      case CMD_ECHO:
-        printf("%s", cmd->argv);
-        break;
-
-      case CMD_EXTERNAL:
-        external_exec(cmd->argv);
-        break;
-      default:
-        fprintf(stderr, "oyster: command not found\n");
-        break;
+      }
+      waitpid(pid, NULL, 0);
     }
+    else { 
+      debug_print_cmds(cmd, 1);
+      built_in_cmd(&cmd[0]);
+    }
+    return;
   }
 }

@@ -28,5 +28,4 @@ typedef enum {
   CMD_UNKNOWN,
 } BUILT_IN_CMD;
 
-BUILT_IN_CMD get_redirector(const char *cmd);
 void handle_exec(Command *cmd, size_t cmd_count);
