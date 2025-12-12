@@ -37,12 +37,12 @@ int main(void) {
 
     handle_exec(cmd, total_cmd);
 
-    if (strncmp(str, "quit", 4) == 0) {
+    if (strncmp(str, "exit", 4) == 0) {
       fprintf(stdout, "Exited oyster shell\n");
       token_list_free(tokens);
       all_commands_free(cmd, total_cmd);
       free(str);
-      return 0;
+      exit(EXIT_SUCCESS);
     }
 
     token_list_free(tokens);   

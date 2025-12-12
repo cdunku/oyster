@@ -366,12 +366,13 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count
     t = t->next;
     return cmd;
   }
-  else if(strcmp(t->content, ">") == 0) {
+  else if(strcmp(t->content, ">") == 0 || strcmp(t->content, ">>") == 0) {
     if(t->next == NULL) {
       fprintf(stderr, "Syntax error: expected filename after '>'\n");
       return NULL;
     }
     cmd[*current_cmd].file_out = strdup(t->next->content);
+    cmd[*current_cmd].append = (strcmp(t->content, ">>") == 0) ? true : false;
     return cmd;
   }
 }

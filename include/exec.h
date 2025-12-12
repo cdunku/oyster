@@ -4,7 +4,6 @@
 
 typedef enum {
   // Built-in commands 
-  CMD_EXIT,
   CMD_CD,
   CMD_ECHO,
   CMD_PWD,

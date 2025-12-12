@@ -16,7 +16,6 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
   if(cmd == NULL) { return CMD_UNKNOWN; }
 
   if(strcmp(cmd, "cd") == 0) { return CMD_CD; }
-  else if(strcmp(cmd, "exit") == 0) { return CMD_EXIT; }
   else if(strcmp(cmd, "help") == 0) { return CMD_HELP; }
   else if(strcmp(cmd, "echo") == 0) { return CMD_ECHO; }
   else { return CMD_EXTERNAL; }
@@ -86,9 +85,6 @@ void built_in_cmd(Command *cmd) {
   BUILT_IN_CMD current_cmd = get_cmd(cmd->argv[0]);
   
   switch (current_cmd) {
-    case CMD_EXIT:
-      exit(0);
-      
     case CMD_CD:
       cmd_cd(cmd->argv);
       break;
@@ -123,6 +119,8 @@ void built_in_cmd(Command *cmd) {
 
 
 void handle_exec(Command *cmd, size_t cmd_count) {
+
+  if(strcmp(cmd->argv[0], "exit") == 0) { return; }
 
   if(cmd_count > 1) {
     size_t number_of_pipes = cmd_count - 1;
