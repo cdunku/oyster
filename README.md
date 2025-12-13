@@ -15,7 +15,6 @@ It has served me as a learning tool on creating a minimal, but functional comman
 ## Upcoming features
 
 ### Redirectors and Logical Operators
-- Adding support for the following redirectors: `&>`
 - Adding support for the following logical operators: `&&`, `||`
   
 ### History + Readline
