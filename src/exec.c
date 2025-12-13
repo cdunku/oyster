@@ -33,6 +33,20 @@ void redirect_io(Command *cmd, size_t i) {
     dup2(fd, STDIN_FILENO);
     close(fd);
   }
+  if(cmd_->file_out != NULL && cmd_->file_err != NULL) {
+    int fd; 
+    int ff = cmd_->stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+                                       (O_WRONLY | O_CREAT | O_TRUNC);
+    fd = open(cmd_->file_out, ff, 0644);
+    if(fd < 0) {
+      fprintf(stderr, "Error unable to write output and error to %s\n", cmd_->file_out);
+      return;
+    }
+    fflush(stdout);
+    dup2(fd, STDOUT_FILENO);
+    dup2(STDOUT_FILENO, STDERR_FILENO);
+    close(fd);
+  }
   if(cmd_->file_out != NULL){
     int fd; 
     int ff = cmd_->stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :

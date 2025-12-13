@@ -387,14 +387,24 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count
   }
   else if(strcmp(t->content, "2>") == 0 || strcmp(t->content, "2>>") == 0) {
     if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: exptected filename after '%s'", t->content);
+      fprintf(stderr, "Syntax error: expected filename after '%s'", t->content);
       return NULL;
     }
     cmd[*current_cmd].file_err = strdup(t->next->content);
     cmd[*current_cmd].stderr_append = (strcmp(t->content, "2>>") == 0) ? true : false;
     return cmd;
-  } 
-  return cmd;
+  }
+  else if(strcmp(t->content, "&>") == 0 || strcmp(t->content, "&>>") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
+      return NULL;
+    }
+    cmd[*current_cmd].file_out = strdup(t->next->content);
+    cmd[*current_cmd].file_err = strdup(t->next->content);
+    cmd[*current_cmd].stdio_append = cmd[*current_cmd].stderr_append = (strcmp(t->content, "&>>") == 0) ? true : false;
+    return cmd;
+  }
+  return NULL;
 }
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
@@ -442,7 +452,9 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
          strcmp(t->content, "<") == 0 ||
          strcmp(t->content, ">>") == 0 ||
          strcmp(t->content, "2>") == 0 || 
-         strcmp(t->content, "2>>") == 0) {
+         strcmp(t->content, "&>") == 0 ||
+         strcmp(t->content, "2>>") == 0 || 
+         strcmp(t->content, "&>>") == 0) {
 
         t = t->next;
         if(t == NULL) {

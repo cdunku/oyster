@@ -9,7 +9,7 @@ It has served me as a learning tool on creating a minimal, but functional comman
 - Implemented my own `getline()` function
 - Implemented my own `tokenizer` and `command parser`
 - Support for multiple commands (`|`)
-- Support for following redirectors: `<`, `>`, `>>`, `2>`, `2>>` 
+- Support for following redirectors: `<`, `>`, `>>`, `2>`, `2>>`, `&>`, `&>>` 
 - Built-in commands: `cd`, `exit`, `pwd`, `echo`
 
 ## Upcoming features
