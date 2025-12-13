@@ -21,16 +21,6 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
   else { return CMD_EXTERNAL; }
 }
 
-BUILT_IN_CMD get_redirector(Command *cmd, size_t i) {
-  if(cmd == NULL) { return CMD_UNKNOWN; }
-
-  if(cmd[i].file_out != NULL) { return CMD_OUTPUT_REDIRECT; }
-  else if(cmd[i].file_in != NULL) { return CMD_INPUT_REDIRECT; }
-  else if(cmd[i].append != 0) { return CMD_APPEND_REDIRECT; }
-
-  else { return CMD_IS_COMMAND; }
-}
-
 void redirect_io(Command *cmd, size_t i) {
   Command *cmd_ = &cmd[i];
 
@@ -45,15 +35,29 @@ void redirect_io(Command *cmd, size_t i) {
   }
   if(cmd_->file_out != NULL){
     int fd; 
-    int ff = cmd_->append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
-                                 (O_WRONLY | O_CREAT | O_TRUNC);
+    int ff = cmd_->stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+                                       (O_WRONLY | O_CREAT | O_TRUNC);
     fd = open(cmd_->file_out, ff, 0644);
     if(fd < 0) {
-      fprintf(stderr, "Error: unable to write to %s\n", cmd_->file_out);
+      fprintf(stderr, "Error: unable to write output to %s\n", cmd_->file_out);
       return;
     }
     fflush(stdout);
     dup2(fd, STDOUT_FILENO);
+    close(fd);
+  }
+  if(cmd_->file_err != NULL) {
+    int fd; 
+    int ff = cmd_->stderr_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) : 
+                                        (O_WRONLY | O_CREAT | O_TRUNC);
+            
+    fd = open(cmd->file_err, ff, 0644);
+    if(fd < 0) {
+      fprintf(stderr, "Error: unable to write error to %s\n", cmd_->file_err);
+      return;
+    }
+    fflush(stdout);
+    dup2(fd, STDERR_FILENO);
     close(fd);
   }
 }
@@ -158,7 +162,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
           close(pipes[j][1]);   
         }
 
-        if(cmd->file_in != NULL || cmd->file_out != NULL || cmd->append == true) { redirect_io(cmd, i); }
+        if(cmd->file_in != NULL || cmd->file_out != NULL || cmd->file_err != NULL) { redirect_io(cmd, i); }
 
         if(execvp(cmd[i].argv[0], cmd[i].argv) == -1) {
           fprintf(stderr, "Fatal: child process failed to execute command\n");
@@ -176,7 +180,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
   else {
     BUILT_IN_CMD command = get_cmd(cmd[0].argv[0]);
 
-    if(command == CMD_EXTERNAL && cmd[0].file_in == NULL && cmd[0].file_out == NULL && cmd[0].append == false) {
+    if(command == CMD_EXTERNAL && cmd[0].file_in == NULL && cmd[0].file_out == NULL && cmd[0].file_err == NULL) {
       pid_t pid = fork();
 
       if(pid == -1) {
@@ -191,7 +195,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
 
       waitpid(pid, NULL, 0);
     }
-    else if(cmd[0].file_in != NULL || cmd[0].file_out != NULL || cmd[0].append == true) {
+    else if(cmd[0].file_in != NULL || cmd[0].file_out != NULL || cmd[0].file_err != NULL) {
       pid_t pid = fork();
       if(pid == -1) {
         fprintf(stderr, "Fatal: child process failed to execute command\n");

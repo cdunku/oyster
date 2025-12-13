@@ -60,7 +60,15 @@ bool check_for_redirector_operator(const char *str, size_t i, size_t *consumed, 
     }
     case '&':
     case '2': {
-      if(str[i + 1] == '>') {
+      if(str[i + 1] == '>' && str[i + 2] == '>') {
+        operator[0] = ch;
+        operator[1] = '>';
+        operator[2] = '>';
+        operator[3] = '\0';
+        *consumed = 2;
+        return true;
+      }
+      else if(str[i + 1] == '>') {
         operator[0] = ch;
         operator[1] = '>';
         operator[2] = '\0';
@@ -268,7 +276,7 @@ Token *tokenizer(const char *str) {
   bool quotes = false, double_quotes = false;
   char save_quote = 0;
 
-  char redirect_operator[3];
+  char redirect_operator[4];
 
   while(length > i) {
     char c = str[i];
@@ -314,7 +322,7 @@ Token *tokenizer(const char *str) {
       continue;
     }
 
-    // Increment to the next index, and append the character to *buffer.
+    // Increment to the next index, and stdio_append the character to *buffer.
     i++;
     append_ch(&tb, c);
   }
@@ -353,7 +361,9 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count
     cmd[*current_cmd].argc = 0;
     cmd[*current_cmd].file_in = NULL;
     cmd[*current_cmd].file_out = NULL;
-    cmd[*current_cmd].append = false;
+    cmd[*current_cmd].file_err = NULL;
+    cmd[*current_cmd].stdio_append = false;
+    cmd[*current_cmd].stderr_append = false;
 
     return cmd;
   }
@@ -368,13 +378,23 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count
   }
   else if(strcmp(t->content, ">") == 0 || strcmp(t->content, ">>") == 0) {
     if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '>'\n");
+      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
       return NULL;
     }
     cmd[*current_cmd].file_out = strdup(t->next->content);
-    cmd[*current_cmd].append = (strcmp(t->content, ">>") == 0) ? true : false;
+    cmd[*current_cmd].stdio_append = (strcmp(t->content, ">>") == 0) ? true : false;
     return cmd;
   }
+  else if(strcmp(t->content, "2>") == 0 || strcmp(t->content, "2>>") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: exptected filename after '%s'", t->content);
+      return NULL;
+    }
+    cmd[*current_cmd].file_err = strdup(t->next->content);
+    cmd[*current_cmd].stderr_append = (strcmp(t->content, "2>>") == 0) ? true : false;
+    return cmd;
+  } 
+  return cmd;
 }
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
@@ -401,7 +421,9 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   cmd[current_cmd].argc = 0;
   cmd[current_cmd].file_in = NULL;
   cmd[current_cmd].file_out = NULL;
-  cmd[current_cmd].append = false;
+  cmd[current_cmd].file_err = NULL;
+  cmd[current_cmd].stdio_append = false;
+  cmd[current_cmd].stderr_append = false;
 
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
@@ -418,7 +440,9 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
 
       if(strcmp(t->content, ">") == 0 ||
          strcmp(t->content, "<") == 0 ||
-         strcmp(t->content, ">>") == 0) {
+         strcmp(t->content, ">>") == 0 ||
+         strcmp(t->content, "2>") == 0 || 
+         strcmp(t->content, "2>>") == 0) {
 
         t = t->next;
         if(t == NULL) {

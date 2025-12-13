@@ -20,7 +20,10 @@ typedef struct Command {
   // Redirecting input and output
   char *file_in;
   char *file_out;
-  bool append;
+  char *file_err;
+
+  bool stdio_append;
+  bool stderr_append;
 
 } Command;
 

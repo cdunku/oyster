@@ -29,7 +29,11 @@ void command_free(Command *cmd) {
   cmd->argc = 0;
   if(cmd->file_in != NULL) { free(cmd->file_in); }
   if(cmd->file_out != NULL) { free(cmd->file_out); }
-  
+  if(cmd->file_err != NULL) free(cmd->file_err);
+
+  cmd->stdio_append = false;
+  cmd->stderr_append = false;
+
   free(cmd);
 }
 
@@ -44,9 +48,12 @@ void all_commands_free(Command *cmd, size_t total_cmds) {
       }
       free(cmd[i].argv);
     }
-    if (cmd[i].file_in) free(cmd[i].file_in);
-    if (cmd[i].file_out) free(cmd[i].file_out);
-    cmd[i].append = false;
+    if(cmd[i].file_in != NULL) free(cmd[i].file_in);
+    if(cmd[i].file_out != NULL) free(cmd[i].file_out);
+    if(cmd[i].file_err != NULL) free(cmd[i].file_err);
+
+    cmd[i].stdio_append = false;
+    cmd[i].stderr_append = false;
   }
   free(cmd); // free array of commands
 }

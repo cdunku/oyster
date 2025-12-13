@@ -8,18 +8,16 @@ It has served me as a learning tool on creating a minimal, but functional comman
 
 - Implemented my own `getline()` function
 - Implemented my own `tokenizer` and `command parser`
-- Support for multiple commands (`|`).
+- Support for multiple commands (`|`)
+- Support for following redirectors: `<`, `>`, `>>`, `2>`, `2>>` 
 - Built-in commands: `cd`, `exit`, `pwd`, `echo`
 
 ## Upcoming features
 
 ### Redirectors and Logical Operators
-- Adding support for the following redirectors: `<`, `>`, `<<`, `>>`, `&>`, `2>`
+- Adding support for the following redirectors: `&>`
 - Adding support for the following logical operators: `&&`, `||`
   
-### Built-in Commands with and without redirectors
-- This is currently semi-functional with built-in commands being always executed in a child process. I am working on a fix.
-
 ### History + Readline
 - Interactive line editing
 - Command line history

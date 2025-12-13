@@ -14,14 +14,6 @@ typedef enum {
   CMD_EXPORT,
   CMD_HELP,
   
-  CMD_PIPE_REDIRECT,
-  CMD_OUTPUT_REDIRECT,
-  CMD_APPEND_REDIRECT,
-  CMD_INPUT_REDIRECT,
-  CMD_ERROR_REDIRECT,
-  CMD_BOTH_REDIRECT, // Redirects both the output and error stream.
-  // External commands inputted
-  CMD_IS_COMMAND,
   CMD_EXTERNAL,
 
   CMD_UNKNOWN,
