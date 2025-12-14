@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "tokenizer.h"
+#include "input.h"
 #include "helper.h"
 #include "exec.h"
 
@@ -312,7 +313,7 @@ Token *tokenizer(const char *str) {
     }
 
     size_t operator_size = 0;
-    if(check_for_redirector_operator(str, i, &operator_size, redirect_operator)) {
+    if(check_for_redirector_operator(str, i, &operator_size, redirect_operator) && !quotes) {
       
       // Adds the command being added into the buffer into a node inside the list.
       token_add(&tb, &head, &tail, STRING);
