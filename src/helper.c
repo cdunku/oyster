@@ -27,12 +27,12 @@ void command_free(Command *cmd) {
 
   if(cmd->argv != NULL) { vector_free(cmd->argv, cmd->argc); }
   cmd->argc = 0;
-  if(cmd->file_in != NULL) { free(cmd->file_in); }
-  if(cmd->file_out != NULL) { free(cmd->file_out); }
-  if(cmd->file_err != NULL) free(cmd->file_err);
+  if(cmd->stream.file_in != NULL) { free(cmd->stream.file_in); }
+  if(cmd->stream.file_out != NULL) { free(cmd->stream.file_out); }
+  if(cmd->stream.file_err != NULL) free(cmd->stream.file_err);
 
-  cmd->stdio_append = false;
-  cmd->stderr_append = false;
+  cmd->stream.stdio_append = false;
+  cmd->stream.stderr_append = false;
 
   free(cmd);
 }
@@ -48,12 +48,12 @@ void all_commands_free(Command *cmd, size_t total_cmds) {
       }
       free(cmd[i].argv);
     }
-    if(cmd[i].file_in != NULL) free(cmd[i].file_in);
-    if(cmd[i].file_out != NULL) free(cmd[i].file_out);
-    if(cmd[i].file_err != NULL) free(cmd[i].file_err);
+    if(cmd[i].stream.file_in != NULL) free(cmd[i].stream.file_in);
+    if(cmd[i].stream.file_out != NULL) free(cmd[i].stream.file_out);
+    if(cmd[i].stream.file_err != NULL) free(cmd[i].stream.file_err);
 
-    cmd[i].stdio_append = false;
-    cmd[i].stderr_append = false;
+    cmd[i].stream.stdio_append = false;
+    cmd[i].stream.stderr_append = false;
   }
   free(cmd); // free array of commands
 }

@@ -24,22 +24,22 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
 void redirect_io(Command *cmd, size_t i) {
   Command *cmd_ = &cmd[i];
 
-  if(cmd_->file_in != NULL){
-    int fd = open(cmd_->file_in, O_RDONLY);
+  if(cmd_->stream.file_in != NULL){
+    int fd = open(cmd_->stream.file_in, O_RDONLY);
     if(fd < 0) {
-      fprintf(stderr, "Error: unable to read from %s\n", cmd_->file_in);
+      fprintf(stderr, "Error: unable to read from %s\n", cmd_->stream.file_in);
       return;
     }
     dup2(fd, STDIN_FILENO);
     close(fd);
   }
-  if(cmd_->file_out != NULL && cmd_->file_err != NULL) {
+  if(cmd_->stream.file_out != NULL && cmd_->stream.file_err != NULL) {
     int fd; 
-    int ff = cmd_->stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+    int ff = cmd_->stream.stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
                                        (O_WRONLY | O_CREAT | O_TRUNC);
-    fd = open(cmd_->file_out, ff, 0644);
+    fd = open(cmd_->stream.file_out, ff, 0644);
     if(fd < 0) {
-      fprintf(stderr, "Error unable to write output and error to %s\n", cmd_->file_out);
+      fprintf(stderr, "Error unable to write output and error to %s\n", cmd_->stream.file_out);
       return;
     }
     fflush(stdout);
@@ -47,27 +47,27 @@ void redirect_io(Command *cmd, size_t i) {
     dup2(STDOUT_FILENO, STDERR_FILENO);
     close(fd);
   }
-  if(cmd_->file_out != NULL){
+  if(cmd_->stream.file_out != NULL){
     int fd; 
-    int ff = cmd_->stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+    int ff = cmd_->stream.stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
                                        (O_WRONLY | O_CREAT | O_TRUNC);
-    fd = open(cmd_->file_out, ff, 0644);
+    fd = open(cmd_->stream.file_out, ff, 0644);
     if(fd < 0) {
-      fprintf(stderr, "Error: unable to write output to %s\n", cmd_->file_out);
+      fprintf(stderr, "Error: unable to write output to %s\n", cmd_->stream.file_out);
       return;
     }
     fflush(stdout);
     dup2(fd, STDOUT_FILENO);
     close(fd);
   }
-  if(cmd_->file_err != NULL) {
+  if(cmd_->stream.file_err != NULL) {
     int fd; 
-    int ff = cmd_->stderr_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) : 
+    int ff = cmd_->stream.stderr_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) : 
                                         (O_WRONLY | O_CREAT | O_TRUNC);
             
-    fd = open(cmd->file_err, ff, 0644);
+    fd = open(cmd->stream.file_err, ff, 0644);
     if(fd < 0) {
-      fprintf(stderr, "Error: unable to write error to %s\n", cmd_->file_err);
+      fprintf(stderr, "Error: unable to write error to %s\n", cmd_->stream.file_err);
       return;
     }
     fflush(stdout);
@@ -163,7 +163,6 @@ void handle_exec(Command *cmd, size_t cmd_count) {
       }
 
       if(pids[i] == 0) {
-
         if (i > 0) {
           dup2(pipes[i - 1][0], STDIN_FILENO);
         }
@@ -176,7 +175,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
           close(pipes[j][1]);   
         }
 
-        if(cmd->file_in != NULL || cmd->file_out != NULL || cmd->file_err != NULL) { redirect_io(cmd, i); }
+        if(cmd->stream.file_in != NULL || cmd->stream.file_out != NULL || cmd->stream.file_err != NULL) { redirect_io(cmd, i); }
 
         if(execvp(cmd[i].argv[0], cmd[i].argv) == -1) {
           fprintf(stderr, "Fatal: child process failed to execute command\n");
@@ -194,7 +193,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
   else {
     BUILT_IN_CMD command = get_cmd(cmd[0].argv[0]);
 
-    if(command == CMD_EXTERNAL && cmd[0].file_in == NULL && cmd[0].file_out == NULL && cmd[0].file_err == NULL) {
+    if(command == CMD_EXTERNAL && cmd[0].stream.file_in == NULL && cmd[0].stream.file_out == NULL && cmd[0].stream.file_err == NULL) {
       pid_t pid = fork();
 
       if(pid == -1) {
@@ -209,7 +208,7 @@ void handle_exec(Command *cmd, size_t cmd_count) {
 
       waitpid(pid, NULL, 0);
     }
-    else if(cmd[0].file_in != NULL || cmd[0].file_out != NULL || cmd[0].file_err != NULL) {
+    else if(cmd[0].stream.file_in != NULL || cmd[0].stream.file_out != NULL || cmd[0].stream.file_err != NULL) {
       pid_t pid = fork();
       if(pid == -1) {
         fprintf(stderr, "Fatal: child process failed to execute command\n");
@@ -218,13 +217,11 @@ void handle_exec(Command *cmd, size_t cmd_count) {
       if(pid == 0) {
         redirect_io(cmd, 0);
         if(command == CMD_EXTERNAL) {
-          debug_print_cmds(cmd, 1);
           execvp(cmd[0].argv[0], cmd[0].argv);
           fprintf(stderr, "Fatal: unable to execute command\n");
           exit(EXIT_FAILURE);
         }
         else {
-          debug_print_cmds(cmd, 1);
           built_in_cmd(&cmd[0]);
           exit(EXIT_SUCCESS);
         }
@@ -232,7 +229,6 @@ void handle_exec(Command *cmd, size_t cmd_count) {
       waitpid(pid, NULL, 0);
     }
     else { 
-      debug_print_cmds(cmd, 1);
       built_in_cmd(&cmd[0]);
     }
     return;

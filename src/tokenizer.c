@@ -39,21 +39,23 @@ bool check_for_redirector_operator(const char *str, size_t i, size_t *consumed, 
   switch (ch) { 
     case '|':
     case '<': {
-      operator[0] = ch;
-      operator[1] = '\0';
-      *consumed = 0;
-      return true;
+      if(str[i + 1] != ch) {
+        operator[0] = ch;
+        operator[1] = '\0';
+        *consumed = 0;
+        return true;
+      }
     }
     case '>': {
-      if(str[i + 1] == '>') {
-        operator[0] = '>';
+      if(str[i + 1] == ch) {
+        operator[0] = ch;
         operator[1] = '>';
         operator[2] = '\0';
         *consumed = 1;
         return true;
       }
       else {
-        operator[0] = '>';
+        operator[0] = ch;
         operator[1] = '\0';
         *consumed = 0;
         return true;
@@ -85,6 +87,27 @@ bool check_for_redirector_operator(const char *str, size_t i, size_t *consumed, 
     default: return false;
   }
 
+  return false;
+}
+
+bool check_for_conditional_operator(const char *str, size_t i, size_t *consumed, char *operator) {
+  char ch = str[i];
+  switch (ch) {
+    case '&': 
+    case '|': {
+      if(str[i + 1] == ch) {
+        operator[0] = ch;
+        operator[1] = ch;
+        operator[2] = '\0';
+        *consumed = 1;
+        return true;
+      }
+    }
+    default: {
+      operator[0];
+      return false;
+    }
+  }
   return false;
 }
 // For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
@@ -209,9 +232,9 @@ void token_add(TokBuf *tb, Token **head, Token **tail, TokenType type) {
   }
 
   // Copies everything from the tb->buffer to the actual token.
-  strncpy(token->content, tb->buffer, tb->length + 1);
+  memcpy(token->content, tb->buffer, tb->length);
   token->content[tb->length] = '\0';
-  token->type = type;
+  token->token_type = type;
   token->next = NULL;
 
   // *tail helps us track and append to the *head list.
@@ -251,7 +274,7 @@ void append_ch(TokBuf *tb, char ch) {
 void append_op(Token **head, Token **tail, char *redirect_operator, TokenType type) {
 
   Token *operator = malloc(sizeof(Token));
-  operator->type = OPERATOR;
+  operator->token_type = OPERATOR;
   operator->content = strdup(redirect_operator);
   operator->next = NULL;
   if(tail != NULL) { 
@@ -277,7 +300,7 @@ Token *tokenizer(const char *str) {
   bool quotes = false, double_quotes = false;
   char save_quote = 0;
 
-  char redirect_operator[4];
+  char operator[4];
 
   while(length > i) {
     char c = str[i];
@@ -313,17 +336,24 @@ Token *tokenizer(const char *str) {
     }
 
     size_t operator_size = 0;
-    if(check_for_redirector_operator(str, i, &operator_size, redirect_operator) && !quotes) {
-      
+    if(check_for_conditional_operator(str, i, &operator_size, operator) && !quotes) {
       // Adds the command being added into the buffer into a node inside the list.
       token_add(&tb, &head, &tail, STRING);
-      // Append the operator to the list using a node
-      append_op(&head, &tail, redirect_operator, OPERATOR);
+      // Append the operator to the list using a node.
+      append_op(&head, &tail, operator, OPERATOR);
+      i += 1 + operator_size;
+      continue;
+    }
+    if(check_for_redirector_operator(str, i, &operator_size, operator) && !quotes) {
+      // Same logic appears here.
+      token_add(&tb, &head, &tail, STRING);
+      append_op(&head, &tail, operator, OPERATOR);
       i += 1 + operator_size;
       continue;
     }
 
-    // Increment to the next index, and stdio_append the character to *buffer.
+
+    // Increment to the next index, and stream.stdio_append the character to *buffer.
     i++;
     append_ch(&tb, c);
   }
@@ -337,10 +367,57 @@ Token *tokenizer(const char *str) {
 
 
 
-Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count, size_t *current_cmd) {
-  if(strcmp(t->content, "|") == 0) {
+Command *handle_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count, size_t *current_cmd) {
+  if(strcmp(t->content, "&>") == 0 || strcmp(t->content, "&>>") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
+      return NULL;
+    }
+    cmd[*current_cmd].stream.file_out = strdup(t->next->content);
+    cmd[*current_cmd].stream.file_err = strdup(t->next->content);
+    cmd[*current_cmd].stream.stdio_append = cmd[*current_cmd].stream.stderr_append = (strcmp(t->content, "&>>") == 0) ? true : false;
+    cmd[*current_cmd].op_type = OP_REDIRECT;
+    return cmd;
+  }
+
+  else if(strcmp(t->content, "2>") == 0 || strcmp(t->content, "2>>") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '%s'", t->content);
+      return NULL;
+    }
+    cmd[*current_cmd].stream.file_err = strdup(t->next->content);
+    cmd[*current_cmd].stream.stderr_append = (strcmp(t->content, "2>>") == 0) ? true : false;
+    cmd[*current_cmd].op_type = OP_REDIRECT;
+    return cmd;
+  }
+
+  else if(strcmp(t->content, ">") == 0 || strcmp(t->content, ">>") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
+      return NULL;
+    }
+    cmd[*current_cmd].stream.file_out = strdup(t->next->content);
+    cmd[*current_cmd].stream.stdio_append = (strcmp(t->content, ">>") == 0) ? true : false;
+    cmd[*current_cmd].op_type = OP_REDIRECT;
+    return cmd;
+  }
+
+  else if(strcmp(t->content, "<") == 0) {
+    if(t->next == NULL) {
+      fprintf(stderr, "Syntax error: expected filename after '<'\n");
+      return NULL;
+    }
+    cmd[*current_cmd].stream.file_in = strdup(t->next->content);
+    cmd[*current_cmd].op_type = OP_REDIRECT;
+    t = t->next;
+    return cmd;
+  }
+
+  // Pipes
+  else if(strcmp(t->content, "|") == 0) {
     cmd[*current_cmd].argv[*i] = NULL;
     cmd[*current_cmd].argc = *i;
+    cmd[*current_cmd].op_type = OP_PIPE;
     
     *i = 0;
     (*cmd_count)++;
@@ -360,52 +437,16 @@ Command *handle_io_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count
     }
 
     cmd[*current_cmd].argc = 0;
-    cmd[*current_cmd].file_in = NULL;
-    cmd[*current_cmd].file_out = NULL;
-    cmd[*current_cmd].file_err = NULL;
-    cmd[*current_cmd].stdio_append = false;
-    cmd[*current_cmd].stderr_append = false;
+    cmd[*current_cmd].stream.file_in = NULL;
+    cmd[*current_cmd].stream.file_out = NULL;
+    cmd[*current_cmd].stream.file_err = NULL;
+    cmd[*current_cmd].stream.stdio_append = false;
+    cmd[*current_cmd].stream.stderr_append = false;
+    cmd[*current_cmd].op_type = OP_NONE;
 
     return cmd;
   }
-  else if(strcmp(t->content, "<") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '<'\n");
-      return NULL;
-    }
-    cmd[*current_cmd].file_in = strdup(t->next->content);
-    t = t->next;
-    return cmd;
-  }
-  else if(strcmp(t->content, ">") == 0 || strcmp(t->content, ">>") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
-      return NULL;
-    }
-    cmd[*current_cmd].file_out = strdup(t->next->content);
-    cmd[*current_cmd].stdio_append = (strcmp(t->content, ">>") == 0) ? true : false;
-    return cmd;
-  }
-  else if(strcmp(t->content, "2>") == 0 || strcmp(t->content, "2>>") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '%s'", t->content);
-      return NULL;
-    }
-    cmd[*current_cmd].file_err = strdup(t->next->content);
-    cmd[*current_cmd].stderr_append = (strcmp(t->content, "2>>") == 0) ? true : false;
-    return cmd;
-  }
-  else if(strcmp(t->content, "&>") == 0 || strcmp(t->content, "&>>") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
-      return NULL;
-    }
-    cmd[*current_cmd].file_out = strdup(t->next->content);
-    cmd[*current_cmd].file_err = strdup(t->next->content);
-    cmd[*current_cmd].stdio_append = cmd[*current_cmd].stderr_append = (strcmp(t->content, "&>>") == 0) ? true : false;
-    return cmd;
-  }
-  return NULL;
+  return cmd;
 }
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
@@ -430,42 +471,36 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   }
 
   cmd[current_cmd].argc = 0;
-  cmd[current_cmd].file_in = NULL;
-  cmd[current_cmd].file_out = NULL;
-  cmd[current_cmd].file_err = NULL;
-  cmd[current_cmd].stdio_append = false;
-  cmd[current_cmd].stderr_append = false;
-
+  cmd[current_cmd].stream.file_in = NULL;
+  cmd[current_cmd].stream.file_out = NULL;
+  cmd[current_cmd].stream.file_err = NULL;
+  cmd[current_cmd].stream.stdio_append = false;
+  cmd[current_cmd].stream.stderr_append = false;
+  cmd[current_cmd].op_type = OP_NONE;
+  
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
-    if(t->type == OPERATOR) {
+    if(t->token_type == OPERATOR) {
       argv_capacity = CAPACITY;
-      Command *_cmd = handle_io_operator(cmd, t, &i, &cmd_count, &current_cmd);
+      Command *_cmd = handle_operator(cmd, t, &i, &cmd_count, &current_cmd);
       if(_cmd == NULL) {
         fprintf(stderr, "Error: unable to retrieve redirect operator\n");
         break;
       }
       cmd = _cmd;
 
-
-      if(strcmp(t->content, ">") == 0 ||
-         strcmp(t->content, "<") == 0 ||
-         strcmp(t->content, ">>") == 0 ||
-         strcmp(t->content, "2>") == 0 || 
-         strcmp(t->content, "&>") == 0 ||
-         strcmp(t->content, "2>>") == 0 || 
-         strcmp(t->content, "&>>") == 0) {
-
-        t = t->next;
+      // Skip the operator.
+      t = t->next;
+      if(cmd[current_cmd].op_type == OP_REDIRECT) {
         if(t == NULL) {
           fprintf(stderr, "Error: parser error using redirection\n");
           break;
         }
-        // Move one node after the redirected stream.
+        // Skip the stdin/stdout/stderr stream.
         t = t->next;
-        continue;
       }
+      continue;
     }
     cmd[current_cmd].argv[i++] = strdup(t->content);
 

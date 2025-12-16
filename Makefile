@@ -39,5 +39,5 @@ $(BIN): $(OBJS)
 # Clean generated files
 clean:
 	@echo "[cleaned]   $(BIN) $(OBJS)"
-	@rm -rvf $(OBJS) $(BIN) *.gch ncore.* > /dev/null 2>&1
+	@rm -rvf $(OBJS) $(BIN) *.txt *.gch ncore.* > /dev/null 2>&1
 
