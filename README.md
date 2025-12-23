@@ -10,12 +10,11 @@ It has served me as a learning tool on creating a minimal, but functional comman
 - Implemented my own `tokenizer` and `command parser`
 - Support for multiple commands (`|`)
 - Support for following redirectors: `<`, `>`, `>>`, `2>`, `2>>`, `&>`, `&>>` 
+- Added support for `&&`, `||`
 - Built-in commands: `cd`, `exit`, `pwd`, `echo`
 
 ## Upcoming features
 
-### Redirectors and Logical Operators
-- Adding support for the following logical operators: `&&`, `||`
   
 ### History + Readline
 - Interactive line editing
@@ -34,7 +33,6 @@ It has served me as a learning tool on creating a minimal, but functional comman
 - Variable expansion (`$HOME`, `$PATH`)
 
 ### Parser improvements
-- Currently there are some problems when running `|` inside a `" "` or `' '`, I will start fixing that soon.
 - Improve readability, maintainability and correctness.
 
 
