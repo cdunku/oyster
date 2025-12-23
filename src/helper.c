@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "helper.h"
 
@@ -56,4 +57,26 @@ void all_commands_free(Command *cmd, size_t total_cmds) {
     cmd[i].stream.stderr_append = false;
   }
   free(cmd); // free array of commands
+}
+
+void free_units(ExecutionUnit* units, size_t units_count) {
+  for(size_t i = 0; i < units_count; i++) {
+    all_commands_free(units[i].pl.cmds, units[i].pl.cmds_count);
+  }
+  free(units);
+}
+
+// Operators for returning the valid operator.
+OperatorType get_operator(const char *str) {
+  if(strcmp(str, ">")  == 0) { return OP_REDIRECT_OUT; }
+  else if(strcmp(str, ">>")  == 0) { return OP_REDIRECT_OUT_APPEND; }
+  else if(strcmp(str, "2>") == 0) { return OP_REDIRECT_ERR; } 
+  else if(strcmp(str, "2>>") == 0) { return OP_REDIRECT_ERR_APPEND; }
+  else if(strcmp(str, "&>") == 0) { return OP_REDIRECT_ALL; } 
+  else if(strcmp(str, "&>>") == 0) { return OP_REDIRECT_ALL_APPEND; }
+  else if(strcmp(str, ">") ==  0) { return OP_REDIRECT_IN; }
+  else if(strcmp(str, "|") == 0) { return OP_PIPE; }
+  else if(strcmp(str, "&&") == 0) { return OP_CONDITIONAL_AND; }
+  else if(strcmp(str, "||") == 0) { return OP_CONDITIONAL_OR; }
+  return OP_NONE;
 }

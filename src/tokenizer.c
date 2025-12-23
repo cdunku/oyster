@@ -366,58 +366,66 @@ Token *tokenizer(const char *str) {
 }
 
 
+bool handle_stream(Command *cmd, OperatorType operator, const char *filename) {
+  RedirectionStream *s = &cmd->stream;
 
-Command *handle_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count, size_t *current_cmd) {
-  if(strcmp(t->content, "&>") == 0 || strcmp(t->content, "&>>") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
-      return NULL;
+  switch (operator) {
+    case OP_REDIRECT_IN: {
+      if(s->file_in != NULL) { free(s->file_in); }
+
+      s->file_in = strdup(filename);
+      return true;
     }
-    cmd[*current_cmd].stream.file_out = strdup(t->next->content);
-    cmd[*current_cmd].stream.file_err = strdup(t->next->content);
-    cmd[*current_cmd].stream.stdio_append = cmd[*current_cmd].stream.stderr_append = (strcmp(t->content, "&>>") == 0) ? true : false;
-    cmd[*current_cmd].op_type = OP_REDIRECT;
-    return cmd;
-  }
+    case OP_REDIRECT_OUT:
+    case OP_REDIRECT_OUT_APPEND: {
+      if(s->file_out != NULL) { free(s->file_out); }
 
-  else if(strcmp(t->content, "2>") == 0 || strcmp(t->content, "2>>") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '%s'", t->content);
-      return NULL;
+      s->file_out = strdup(filename);
+      s->stdio_append = (operator == OP_REDIRECT_OUT_APPEND);
+      return true;
     }
-    cmd[*current_cmd].stream.file_err = strdup(t->next->content);
-    cmd[*current_cmd].stream.stderr_append = (strcmp(t->content, "2>>") == 0) ? true : false;
-    cmd[*current_cmd].op_type = OP_REDIRECT;
-    return cmd;
-  }
+    case OP_REDIRECT_ERR:
+    case OP_REDIRECT_ERR_APPEND: {
+      if(s->file_err != NULL) { free(s->file_err); }
 
-  else if(strcmp(t->content, ">") == 0 || strcmp(t->content, ">>") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '%s'\n", t->content);
-      return NULL;
+      s->file_err = strdup(filename);
+      s->stderr_append = (operator == OP_REDIRECT_ERR_APPEND);
+      return true;
     }
-    cmd[*current_cmd].stream.file_out = strdup(t->next->content);
-    cmd[*current_cmd].stream.stdio_append = (strcmp(t->content, ">>") == 0) ? true : false;
-    cmd[*current_cmd].op_type = OP_REDIRECT;
-    return cmd;
-  }
+    case OP_REDIRECT_ALL_APPEND:
+    case OP_REDIRECT_ALL: {
+      if(s->file_out != NULL) { free(s->file_out); }
+      if(s->file_err != NULL) { free(s->file_err); }
 
-  else if(strcmp(t->content, "<") == 0) {
-    if(t->next == NULL) {
-      fprintf(stderr, "Syntax error: expected filename after '<'\n");
-      return NULL;
+      s->file_out = strdup(filename);
+      s->file_err = strdup(filename);
+
+      s->stdio_append = (operator == OP_REDIRECT_ALL_APPEND);
+      s->stderr_append = false;
+      return true;
     }
-    cmd[*current_cmd].stream.file_in = strdup(t->next->content);
-    cmd[*current_cmd].op_type = OP_REDIRECT;
-    t = t->next;
-    return cmd;
   }
+  return false;
+}
+// Does a check whether if a redirector occured using the range of OperatorType enum.
+bool is_redirector(OperatorType operator) {
+  return operator >= OP_REDIRECT_IN && operator <= OP_REDIRECT_ALL_APPEND;
+}
 
-  // Pipes
-  else if(strcmp(t->content, "|") == 0) {
+Command *handle_operator(Command *cmd, Token **t, size_t *i, size_t *cmd_count, size_t *current_cmd, OperatorType operator) {
+
+  if(is_redirector(operator)) {
+    // Skip the stdin/stdout/stderr stream.
+    (*t) = (*t)->next;
+    if(*t == NULL) {
+      fprintf(stderr, "Error: parser error using redirection\n");
+      return NULL;;
+    }
+    if(handle_stream(&cmd[*current_cmd], operator, (*t)->content)) { return cmd; }
+  }
+  else if(operator == OP_PIPE) {
     cmd[*current_cmd].argv[*i] = NULL;
     cmd[*current_cmd].argc = *i;
-    cmd[*current_cmd].op_type = OP_PIPE;
     
     *i = 0;
     (*cmd_count)++;
@@ -430,24 +438,20 @@ Command *handle_operator(Command *cmd, Token *t, size_t *i, size_t *cmd_count, s
     }
     cmd = cmd_;
 
+    memset(&cmd[*current_cmd], 0, sizeof(Command));
+
     cmd[*current_cmd].argv = malloc(CAPACITY * sizeof(char *));
     if(cmd[*current_cmd].argv == NULL) {
       fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
       exit(EXIT_FAILURE);
     }
 
-    cmd[*current_cmd].argc = 0;
-    cmd[*current_cmd].stream.file_in = NULL;
-    cmd[*current_cmd].stream.file_out = NULL;
-    cmd[*current_cmd].stream.file_err = NULL;
-    cmd[*current_cmd].stream.stdio_append = false;
-    cmd[*current_cmd].stream.stderr_append = false;
-    cmd[*current_cmd].op_type = OP_NONE;
-
     return cmd;
   }
   return cmd;
 }
+
+
 
 // We parse the commands, manage the I/O stream for each command and handle redirectors.
 Command *parse_cmds(Token *t, size_t *total_cmd) {
@@ -464,42 +468,34 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
 
   size_t argv_capacity = CAPACITY;
 
+  memset(&cmd[current_cmd], 0, sizeof(Command));
   cmd[current_cmd].argv = malloc(argv_capacity * sizeof(char *));
   if(cmd[current_cmd].argv == NULL) {
     fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
     exit(EXIT_FAILURE);
   }
 
-  cmd[current_cmd].argc = 0;
-  cmd[current_cmd].stream.file_in = NULL;
-  cmd[current_cmd].stream.file_out = NULL;
-  cmd[current_cmd].stream.file_err = NULL;
-  cmd[current_cmd].stream.stdio_append = false;
-  cmd[current_cmd].stream.stderr_append = false;
-  cmd[current_cmd].op_type = OP_NONE;
-  
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
   while(t != NULL) {
     if(t->token_type == OPERATOR) {
+
       argv_capacity = CAPACITY;
-      Command *_cmd = handle_operator(cmd, t, &i, &cmd_count, &current_cmd);
+
+      OperatorType operator = get_operator(t->content);
+
+      // If a && or || occurs, then end the pipeline and command parsing.
+      if(operator == OP_CONDITIONAL_AND || operator == OP_CONDITIONAL_OR) { break; }
+
+      Command *_cmd = handle_operator(cmd, &t, &i, &cmd_count, &current_cmd, operator);
       if(_cmd == NULL) {
         fprintf(stderr, "Error: unable to retrieve redirect operator\n");
         break;
       }
       cmd = _cmd;
-
-      // Skip the operator.
+     
+      // Skip the operator or file stream.
       t = t->next;
-      if(cmd[current_cmd].op_type == OP_REDIRECT) {
-        if(t == NULL) {
-          fprintf(stderr, "Error: parser error using redirection\n");
-          break;
-        }
-        // Skip the stdin/stdout/stderr stream.
-        t = t->next;
-      }
       continue;
     }
     cmd[current_cmd].argv[i++] = strdup(t->content);
@@ -524,7 +520,6 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
   }
 
   *total_cmd = cmd_count;
-
 
   return cmd;
 }

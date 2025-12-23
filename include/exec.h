@@ -19,4 +19,5 @@ typedef enum {
   CMD_UNKNOWN,
 } BUILT_IN_CMD;
 
-void handle_exec(Command *cmd, size_t cmd_count);
+ExecutionUnit *handle_parsed_units(Token *t, size_t *units_count);
+void handle_exec_units(ExecutionUnit* unit, size_t units_count);

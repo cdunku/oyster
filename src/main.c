@@ -60,7 +60,7 @@ char *join_unclosed_strings(char *str, char* unclosed_string) {
 
 int main(void) {
   char *str = NULL;
-  size_t total_cmd = 1;
+  size_t total_cmds = 0;
 
   while (1) {
     if (write(STDOUT_FILENO, "$ -> ", 5) == -1) {
@@ -99,25 +99,16 @@ int main(void) {
       continue;
     }
 
-    Command *cmd = parse_cmds(tokens, &total_cmd);
-    if (cmd == NULL) {
+    ExecutionUnit *units = handle_parsed_units(tokens, &total_cmds);
+    if(units == NULL) {
       token_list_free(tokens);
       free(str);
       continue;
     }
-
-    handle_exec(cmd, total_cmd);
-
-    if (strcmp(str, "exit") == 0) {
-      fprintf(stdout, "Exited oyster shell\n");
-      token_list_free(tokens);
-      all_commands_free(cmd, total_cmd);
-      free(str);
-      exit(EXIT_SUCCESS);
-    }
+    handle_exec_units(units, total_cmds);
 
     token_list_free(tokens);   
-    all_commands_free(cmd, total_cmd);         
+    free_units(units, total_cmds);         
     free(str);
     str = NULL;
   }
