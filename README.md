@@ -17,10 +17,6 @@ It has served me as a learning tool on creating a minimal, but functional comman
 
 ## Upcoming features
 
-<<<<<<< Updated upstream
-  
-=======
->>>>>>> Stashed changes
 ### History + Readline
 - Interactive line editing
 - Command line history
