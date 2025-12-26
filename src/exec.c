@@ -12,6 +12,9 @@
 
 #define BUFFER_SIZE 64
 
+// Default value is 0, global status of last command.
+static int g_last_status = 0;
+
 BUILT_IN_CMD get_cmd(const char *cmd) {
   if(cmd == NULL) { return CMD_UNKNOWN; }
 
@@ -19,62 +22,6 @@ BUILT_IN_CMD get_cmd(const char *cmd) {
   else if(strcmp(cmd, "help") == 0) { return CMD_HELP; }
   else if(strcmp(cmd, "echo") == 0) { return CMD_ECHO; }
   else { return CMD_EXTERNAL; }
-}
-
-void redirect_io(Command *cmd, size_t i) {
-  Command *cmd_ = &cmd[i];
-
-  if(cmd_->stream.file_in != NULL){
-    int fd = open(cmd_->stream.file_in, O_RDONLY);
-    if(fd < 0) {
-      fprintf(stderr, "Error: unable to read from %s\n", cmd_->stream.file_in);
-      return;
-    }
-    dup2(fd, STDIN_FILENO);
-    close(fd);
-  }
-  else if(cmd_->stream.file_out != NULL && cmd_->stream.file_err != NULL) {
-    int fd; 
-    // Checks whether if appending has occured.
-    int ff = cmd_->stream.stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
-                                       (O_WRONLY | O_CREAT | O_TRUNC);
-    fd = open(cmd_->stream.file_out, ff, 0644);
-    if(fd < 0) {
-      fprintf(stderr, "Error unable to write output and error to %s\n", cmd_->stream.file_out);
-      return;
-    }
-    fflush(stdout);
-    dup2(fd, STDOUT_FILENO);
-    dup2(STDOUT_FILENO, STDERR_FILENO);
-    close(fd);
-  }
-  else if(cmd_->stream.file_out != NULL){
-    int fd; 
-    int ff = cmd_->stream.stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
-                                       (O_WRONLY | O_CREAT | O_TRUNC);
-    fd = open(cmd_->stream.file_out, ff, 0644);
-    if(fd < 0) {
-      fprintf(stderr, "Error: unable to write output to %s\n", cmd_->stream.file_out);
-      return;
-    }
-    fflush(stdout);
-    dup2(fd, STDOUT_FILENO);
-    close(fd);
-  }
-  else if(cmd_->stream.file_err != NULL) {
-    int fd; 
-    int ff = cmd_->stream.stderr_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) : 
-                                        (O_WRONLY | O_CREAT | O_TRUNC);
-            
-    fd = open(cmd->stream.file_err, ff, 0644);
-    if(fd < 0) {
-      fprintf(stderr, "Error: unable to write error to %s\n", cmd_->stream.file_err);
-      return;
-    }
-    fflush(stdout);
-    dup2(fd, STDERR_FILENO);
-    close(fd);
-  }
 }
 
 // Commands in functions
@@ -150,7 +97,95 @@ int built_in_cmd(Command *cmd) {
   return status;
 }
 
-void handle_single_cmd(Command *cmd, int *status) {
+
+// Functions for handling commands, I/O and special characters
+
+void redirect_io(Command *cmd, size_t i) {
+  Command *cmd_ = &cmd[i];
+
+  if(cmd_->stream.file_in != NULL){
+    int fd = open(cmd_->stream.file_in, O_RDONLY);
+    if(fd < 0) {
+      fprintf(stderr, "Error: unable to read from %s\n", cmd_->stream.file_in);
+      return;
+    }
+    dup2(fd, STDIN_FILENO);
+    close(fd);
+  }
+  else if(cmd_->stream.file_out != NULL && cmd_->stream.file_err != NULL) {
+    int fd; 
+    // Checks whether if appending has occured.
+    int ff = cmd_->stream.stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+                                       (O_WRONLY | O_CREAT | O_TRUNC);
+    fd = open(cmd_->stream.file_out, ff, 0644);
+    if(fd < 0) {
+      fprintf(stderr, "Error unable to write output and error to %s\n", cmd_->stream.file_out);
+      return;
+    }
+    fflush(stdout);
+    dup2(fd, STDOUT_FILENO);
+    dup2(STDOUT_FILENO, STDERR_FILENO);
+    close(fd);
+  }
+  else if(cmd_->stream.file_out != NULL){
+    int fd; 
+    int ff = cmd_->stream.stdio_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) :
+                                       (O_WRONLY | O_CREAT | O_TRUNC);
+    fd = open(cmd_->stream.file_out, ff, 0644);
+    if(fd < 0) {
+      fprintf(stderr, "Error: unable to write output to %s\n", cmd_->stream.file_out);
+      return;
+    }
+    fflush(stdout);
+    dup2(fd, STDOUT_FILENO);
+    close(fd);
+  }
+  else if(cmd_->stream.file_err != NULL) {
+    int fd; 
+    int ff = cmd_->stream.stderr_append != 0 ? (O_WRONLY | O_CREAT | O_APPEND) : 
+                                        (O_WRONLY | O_CREAT | O_TRUNC);
+            
+    fd = open(cmd->stream.file_err, ff, 0644);
+    if(fd < 0) {
+      fprintf(stderr, "Error: unable to write error to %s\n", cmd_->stream.file_err);
+      return;
+    }
+    fflush(stdout);
+    dup2(fd, STDERR_FILENO);
+    close(fd);
+  }
+}
+
+void handle_special_characters(Pipeline* const pl, int last_status) {
+
+  // Large enough for 32-bit numbers.
+  char buffer[12];
+
+  for(size_t i = 0; i < pl->cmds_count; i++) {
+
+    Command *cmds = &pl->cmds[i];
+
+    size_t j = 0;
+    while(cmds->special_ch_count > 0 && j < cmds->argc) {
+      if(strcmp(cmds->argv[j], "$?") == 0) {
+        snprintf(buffer, sizeof(buffer), "%d", last_status);
+
+        free(cmds->argv[j]);
+        cmds->argv[j] = strdup(buffer);
+
+        cmds->special_ch_count--;
+      }
+      j++;
+    }
+  }
+  return;
+}
+
+
+// Handle Commands
+
+
+void handle_single_cmd(Command* const cmd, int *status) {
   BUILT_IN_CMD command = get_cmd(cmd->argv[0]);
 
   // If not redirection in an external command has occurred.
@@ -164,8 +199,8 @@ void handle_single_cmd(Command *cmd, int *status) {
     }
     if(pid == 0) {
       execvp(cmd->argv[0], cmd->argv);
-      fprintf(stderr, "Fatal: unable to execute command\n");
-      exit(EXIT_FAILURE);
+      fprintf(stderr, "Error: unable to execute command\n");
+      exit(127);
     }
 
     waitpid(pid, status, 0);
@@ -182,8 +217,8 @@ void handle_single_cmd(Command *cmd, int *status) {
       redirect_io(cmd, 0);
       if(command == CMD_EXTERNAL) {
         execvp(cmd->argv[0], cmd->argv);
-        fprintf(stderr, "Fatal: unable to execute command\n");
-        exit(EXIT_FAILURE);
+        fprintf(stderr, "Error: unable to execute command\n");
+        exit(127);
       }
       else {
         int built_in_status = built_in_cmd(&cmd[0]);
@@ -211,7 +246,7 @@ void handle_pipes(Command *cmd, size_t cmd_count, int *status) {
 
   for(size_t i = 0; i < number_of_pipes; i++) {
     if(pipe(pipes[i]) == -1) {
-      fprintf(stderr, "Error: pipe failed to initialise\n");
+      fprintf(stderr, "Fatal: pipe failed to initialise\n");
       all_commands_free(cmd, cmd_count);
       *status = 1;
       return;
@@ -221,7 +256,7 @@ void handle_pipes(Command *cmd, size_t cmd_count, int *status) {
   for(size_t i = 0; i < cmd_count; i++) {
     pids[i] = fork();
     if(pids[i] == -1) {
-      fprintf(stderr, "Error: failed to create process\n");
+      fprintf(stderr, "Fatal: failed to create process\n");
       all_commands_free(cmd, cmd_count);
       *status = 1;
       return;
@@ -240,11 +275,13 @@ void handle_pipes(Command *cmd, size_t cmd_count, int *status) {
         close(pipes[j][1]);   
       }
 
-      if(cmd->stream.file_in != NULL || cmd->stream.file_out != NULL || cmd->stream.file_err != NULL) { redirect_io(cmd, i); }
+      if(cmd[i].stream.file_in != NULL || 
+        cmd[i].stream.file_out != NULL || 
+        cmd[i].stream.file_err != NULL) { redirect_io(cmd, i); }
 
       if(execvp(cmd[i].argv[0], cmd[i].argv) == -1) {
         fprintf(stderr, "Fatal: child process failed to execute command\n");
-        exit(EXIT_FAILURE);
+        exit(127);
       }
     }
   }
@@ -353,6 +390,7 @@ int handle_exec_status(Pipeline* const pl) {
 }
 
 void handle_exec_units(ExecutionUnit* unit, size_t units_count) {
+  // Default value
   int last_status = 0;
 
   for(size_t i = 0; i < units_count; i++) {
@@ -366,6 +404,9 @@ void handle_exec_units(ExecutionUnit* unit, size_t units_count) {
         continue;
       }
     }
+      
+    handle_special_characters(&unit[i].pl, g_last_status);
     last_status = handle_exec_status(&unit[i].pl);
+    g_last_status = last_status;
   }
 }

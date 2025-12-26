@@ -12,10 +12,15 @@ It has served me as a learning tool on creating a minimal, but functional comman
 - Support for following redirectors: `<`, `>`, `>>`, `2>`, `2>>`, `&>`, `&>>` 
 - Added support for `&&`, `||`
 - Built-in commands: `cd`, `exit`, `pwd`, `echo`
+- Support for logical operators: `&&`, `||`
+- Status codes for commands added, including `$?`
 
 ## Upcoming features
 
+<<<<<<< Updated upstream
   
+=======
+>>>>>>> Stashed changes
 ### History + Readline
 - Interactive line editing
 - Command line history

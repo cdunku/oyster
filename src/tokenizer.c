@@ -13,12 +13,42 @@
 
 /* Helper functions */
 
-bool check_for_esc_ch(const char ch) {
-  switch(ch) {
+// Checks whether if an escape character exists.
+bool esc_ch_exists(const char ch) {
+  switch (ch) {
     case '\n':
     case '\t':
     case ' ': return true;
     default: return false;
+  }
+  return false;
+}
+
+// Checks for both escape and special characters.
+bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char *operator) {
+  const char ch = str[i];
+  
+  switch(ch) {
+    case '\n':
+    case '\t':
+    case ' ': {
+      operator[0] = '\0';
+      *consumed = 0;
+      return true;
+    }
+    case '$': {
+      if(str[i + 1] == '?') {
+        operator[0] = ch;
+        operator[1] = '?';
+        operator[2] = '\0';
+        *consumed = 1;
+        return true;
+      }
+    }
+    default: { 
+      operator[0] = '\0';
+      return false;
+    }
   }
   // If something goes wrong
   return false;
@@ -274,7 +304,7 @@ void append_ch(TokBuf *tb, char ch) {
 void append_op(Token **head, Token **tail, char *redirect_operator, TokenType type) {
 
   Token *operator = malloc(sizeof(Token));
-  operator->token_type = OPERATOR;
+  operator->token_type = type;
   operator->content = strdup(redirect_operator);
   operator->next = NULL;
   if(tail != NULL) { 
@@ -295,6 +325,8 @@ Token *tokenizer(const char *str) {
 
   size_t length = strlen(str);
   size_t i = 0;
+  // The offset when tokenizing a redirector, escape character or special symbol.
+  size_t consumed = 0;
 
   // Helps us keep track of quotes. 
   bool quotes = false, double_quotes = false;
@@ -305,9 +337,18 @@ Token *tokenizer(const char *str) {
   while(length > i) {
     char c = str[i];
 
-    if(check_for_esc_ch(c) && !quotes) {
-      token_add(&tb, &head, &tail, STRING);
-      i++;
+    if(check_for_esc_and_spec_ch(str, i, &consumed, operator) && !quotes) {
+      if(tb.length > 0) {
+        token_add(&tb, &head, &tail, STRING);
+        continue;
+      }
+      if(consumed == 0 && esc_ch_exists(c)) { 
+        i++;
+      }
+      else {
+        append_op(&head, &tail, operator, SPECIAL);
+        i += 1 + consumed;
+      }
       continue;
     }
    
@@ -335,20 +376,19 @@ Token *tokenizer(const char *str) {
       continue;
     }
 
-    size_t operator_size = 0;
-    if(check_for_conditional_operator(str, i, &operator_size, operator) && !quotes) {
+    if(check_for_conditional_operator(str, i, &consumed, operator) && !quotes) {
       // Adds the command being added into the buffer into a node inside the list.
       token_add(&tb, &head, &tail, STRING);
       // Append the operator to the list using a node.
       append_op(&head, &tail, operator, OPERATOR);
-      i += 1 + operator_size;
+      i += 1 + consumed;
       continue;
     }
-    if(check_for_redirector_operator(str, i, &operator_size, operator) && !quotes) {
+    if(check_for_redirector_operator(str, i, &consumed, operator) && !quotes) {
       // Same logic appears here.
       token_add(&tb, &head, &tail, STRING);
       append_op(&head, &tail, operator, OPERATOR);
-      i += 1 + operator_size;
+      i += 1 + consumed;
       continue;
     }
 
@@ -498,6 +538,9 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
       t = t->next;
       continue;
     }
+    if(t->token_type == SPECIAL) {
+      cmd[current_cmd].special_ch_count++;
+    } 
     cmd[current_cmd].argv[i++] = strdup(t->content);
 
     if(i + 1 >= argv_capacity) {

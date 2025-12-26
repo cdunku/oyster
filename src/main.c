@@ -7,7 +7,7 @@
 #include "tokenizer.h"
 #include "exec.h"
 #include "helper.h"
-
+#include "error.h"
 
 bool has_unclosed_quotes(const char *str) {
   size_t i = 0;
