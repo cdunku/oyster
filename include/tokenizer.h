@@ -5,7 +5,8 @@
 // STRING - Command or an argument(s); ls -lah.
 // OPERATOR - |, <, >, &&, ||.
 // SPECIAL - $?
-typedef enum { STRING, OPERATOR, SPECIAL } TokenType;
+// GLOB - *, ?, []
+typedef enum { STRING, OPERATOR, SPECIAL, GLOB} TokenType;
 
 // Types of operators supported
 typedef enum {
@@ -51,6 +52,7 @@ typedef struct Command {
 
   char **argv;
   size_t argc;
+  OperatorType *str_type;
 
   // Keeps track whether if a special character has occured.
   size_t special_ch_count;

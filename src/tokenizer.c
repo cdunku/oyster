@@ -25,7 +25,7 @@ bool esc_ch_exists(const char ch) {
 }
 
 // Checks for both escape and special characters.
-bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char *operator) {
+bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char *operator, bool *check_spec_ch) {
   const char ch = str[i];
   
   switch(ch) {
@@ -34,6 +34,7 @@ bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char
     case ' ': {
       operator[0] = '\0';
       *consumed = 0;
+      *check_spec_ch = false;
       return true;
     }
     case '$': {
@@ -42,15 +43,18 @@ bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char
         operator[1] = '?';
         operator[2] = '\0';
         *consumed = 1;
+        *check_spec_ch = true;
         return true;
       }
     }
     default: { 
       operator[0] = '\0';
+      *check_spec_ch = false;
       return false;
     }
   }
   // If something goes wrong
+  *check_spec_ch = false;
   return false;
 }
 
@@ -140,6 +144,17 @@ bool check_for_conditional_operator(const char *str, size_t i, size_t *consumed,
   }
   return false;
 }
+
+bool check_for_globbing(const char c) {
+  switch (c) {
+    case '*':
+    case '?':
+    case '[': return true;
+    default: return false;
+  }
+  return false;
+}
+
 // For simplicity sake, we will only retrieve 2 hex digits and 3 octal digits.
 char parse_hex_escape(const char *str, size_t i, size_t *hex_digits) {
   int val = 0;
@@ -332,23 +347,38 @@ Token *tokenizer(const char *str) {
   bool quotes = false, double_quotes = false;
   char save_quote = 0;
 
+  // Checks for special character
+  bool check_spec_ch = false;
+  bool glob_occurred = false;
+
   char operator[4];
 
   while(length > i) {
     char c = str[i];
 
-    if(check_for_esc_and_spec_ch(str, i, &consumed, operator) && !quotes) {
+    // Checks whether if a glob has occurred
+    if(check_for_globbing(c) && !quotes) {
+      // Sets the glob flag
+      glob_occurred = true;
+      append_ch(&tb, c);
+
+      i++;
+      continue;
+    }
+    if(check_for_esc_and_spec_ch(str, i, &consumed, operator, &check_spec_ch) && !quotes) {
       if(tb.length > 0) {
-        token_add(&tb, &head, &tail, STRING);
-        continue;
+        if(glob_occurred) {
+          token_add(&tb, &head, &tail, GLOB);
+        }
+        else {
+          token_add(&tb, &head, &tail, STRING);
+        }
+        glob_occurred = false;
       }
-      if(consumed == 0 && esc_ch_exists(c)) { 
-        i++;
-      }
-      else {
+      if(check_spec_ch) {
         append_op(&head, &tail, operator, SPECIAL);
-        i += 1 + consumed;
       }
+      i += 1 + consumed;
       continue;
     }
    
@@ -378,7 +408,15 @@ Token *tokenizer(const char *str) {
 
     if(check_for_conditional_operator(str, i, &consumed, operator) && !quotes) {
       // Adds the command being added into the buffer into a node inside the list.
-      token_add(&tb, &head, &tail, STRING);
+      if(tb.length > 0) {
+        if(glob_occurred) {
+          token_add(&tb, &head, &tail, GLOB);
+        }
+        else {
+          token_add(&tb, &head, &tail, STRING);
+        }
+        glob_occurred = false;
+      }
       // Append the operator to the list using a node.
       append_op(&head, &tail, operator, OPERATOR);
       i += 1 + consumed;
@@ -386,7 +424,16 @@ Token *tokenizer(const char *str) {
     }
     if(check_for_redirector_operator(str, i, &consumed, operator) && !quotes) {
       // Same logic appears here.
-      token_add(&tb, &head, &tail, STRING);
+      if(tb.length > 0) {
+        if(glob_occurred) {
+          token_add(&tb, &head, &tail, GLOB);
+        }
+        else {
+          token_add(&tb, &head, &tail, STRING);
+        }
+        glob_occurred = false;
+      }
+
       append_op(&head, &tail, operator, OPERATOR);
       i += 1 + consumed;
       continue;
@@ -399,7 +446,14 @@ Token *tokenizer(const char *str) {
   }
 
   // Finally, add the last token to our linked list and return the list.
-  token_add(&tb, &head, &tail, STRING);
+  if(tb.length > 0) {
+    if(glob_occurred) {
+      token_add(&tb, &head, &tail, GLOB);
+    }
+    else {
+      token_add(&tb, &head, &tail, STRING);
+    }
+  }
   free(tb.buffer);
 
   return head;
@@ -465,6 +519,7 @@ Command *handle_operator(Command *cmd, Token **t, size_t *i, size_t *cmd_count, 
   }
   else if(operator == OP_PIPE) {
     cmd[*current_cmd].argv[*i] = NULL;
+    cmd[*current_cmd].str_type[*i] = '\0';
     cmd[*current_cmd].argc = *i;
     
     *i = 0;
@@ -484,6 +539,10 @@ Command *handle_operator(Command *cmd, Token **t, size_t *i, size_t *cmd_count, 
     if(cmd[*current_cmd].argv == NULL) {
       fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
       exit(EXIT_FAILURE);
+    }
+    cmd[*current_cmd].str_type = malloc(CAPACITY * sizeof(OperatorType));
+    if(cmd[*current_cmd].str_type == NULL) {
+      fprintf(stderr, "Fatal: unable to allocate memory to type of vector\n");
     }
 
     return cmd;
@@ -514,6 +573,11 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
     fprintf(stderr, "Fatal: unable to allocate memory to command vector\n");
     exit(EXIT_FAILURE);
   }
+  cmd[current_cmd].str_type = malloc(argv_capacity * sizeof(OperatorType));
+  if(cmd[current_cmd].argv == NULL) {
+    fprintf(stderr, "Fatal: unable to allocate memory to type of command\n");
+    exit(EXIT_FAILURE);
+  }
 
   // Go throught the list and copy it to the arguments vector.
   size_t i = 0;
@@ -541,7 +605,10 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
     if(t->token_type == SPECIAL) {
       cmd[current_cmd].special_ch_count++;
     } 
-    cmd[current_cmd].argv[i++] = strdup(t->content);
+    cmd[current_cmd].argv[i] = strdup(t->content);
+    cmd[current_cmd].str_type[i] = t->token_type;
+
+    i++;
 
     if(i + 1 >= argv_capacity) {
       argv_capacity *= 2;
@@ -552,13 +619,23 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
         token_list_free(head);
         exit(EXIT_FAILURE);
       }
+
+      OperatorType *str_type_ = realloc(cmd[current_cmd].str_type, argv_capacity * sizeof(OperatorType));
+      if(str_type_ == NULL) {
+        fprintf(stderr, "Error: unable to reallocate memory to command type\n");
+        vector_free(cmd[current_cmd].argv, i);
+        token_list_free(head);
+        exit(EXIT_FAILURE);
+      }
       cmd[current_cmd].argv = argv_;
+      cmd[current_cmd].str_type = str_type_;
     }
     t = t->next;
   }
 
   if(i > 0) {
     cmd[current_cmd].argv[i] = NULL;
+    cmd[current_cmd].str_type[i] = '\0';
     cmd[current_cmd].argc = i;
   }
 

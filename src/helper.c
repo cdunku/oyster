@@ -30,7 +30,7 @@ void command_free(Command *cmd) {
   cmd->argc = 0;
   if(cmd->stream.file_in != NULL) { free(cmd->stream.file_in); }
   if(cmd->stream.file_out != NULL) { free(cmd->stream.file_out); }
-  if(cmd->stream.file_err != NULL) free(cmd->stream.file_err);
+  if(cmd->stream.file_err != NULL) { free(cmd->stream.file_err); }
 
   cmd->stream.stdio_append = false;
   cmd->stream.stderr_append = false;
@@ -49,9 +49,11 @@ void all_commands_free(Command *cmd, size_t total_cmds) {
       }
       free(cmd[i].argv);
     }
-    if(cmd[i].stream.file_in != NULL) free(cmd[i].stream.file_in);
-    if(cmd[i].stream.file_out != NULL) free(cmd[i].stream.file_out);
-    if(cmd[i].stream.file_err != NULL) free(cmd[i].stream.file_err);
+    if(cmd[i].str_type != NULL) { free(cmd[i].str_type); }
+
+    if(cmd[i].stream.file_in != NULL) { free(cmd[i].stream.file_in); }
+    if(cmd[i].stream.file_out != NULL) { free(cmd[i].stream.file_out); }
+    if(cmd[i].stream.file_err != NULL) { free(cmd[i].stream.file_err); }
 
     cmd[i].stream.stdio_append = false;
     cmd[i].stream.stderr_append = false;
