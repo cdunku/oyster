@@ -9,6 +9,7 @@
 #include "tokenizer.h" 
 #include "helper.h"
 #include "error.h"
+#include "glob.h"
 
 #define BUFFER_SIZE 64
 
@@ -404,7 +405,8 @@ void handle_exec_units(ExecutionUnit* unit, size_t units_count) {
         continue;
       }
     }
-      
+
+    expand_glob_for_command(&unit[i].pl);
     handle_special_characters(&unit[i].pl, g_last_status);
     last_status = handle_exec_status(&unit[i].pl);
     g_last_status = last_status;

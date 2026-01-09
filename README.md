@@ -14,6 +14,7 @@ It has served me as a learning tool on creating a minimal, but functional comman
 - Built-in commands: `cd`, `exit`, `pwd`, `echo`
 - Support for logical operators: `&&`, `||`
 - Status codes for commands added, including `$?`
+- Includes globbing: `*`
 
 ## Upcoming features
 
@@ -28,7 +29,7 @@ It has served me as a learning tool on creating a minimal, but functional comman
 - Proper process grouping and signal handling
 
 ### Globbing
-- The use of wildcard expansions (`*`, `?`)
+- The use of wildcard expansions (`?`, `[]`)
 
 ### Environment Variables (Maybe)
 - Variable expansion (`$HOME`, `$PATH`)
@@ -52,3 +53,6 @@ You will be inside the shell when you see:
 ```bash
 $ -> 
 ```
+
+## NOTE 
+I will be maintaining this shell and adding new features every once in a while. This list above is what I plan to add in the future.
