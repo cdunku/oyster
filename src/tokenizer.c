@@ -319,10 +319,16 @@ void append_ch(TokBuf *tb, char ch) {
 void append_op(Token **head, Token **tail, char *redirect_operator, TokenType type) {
 
   Token *operator = malloc(sizeof(Token));
+
+  if(operator == NULL) {
+    fprintf(stderr, "Error: unable to allocate memory to operator\n");
+    exit(EXIT_FAILURE);
+  }
+
   operator->token_type = type;
   operator->content = strdup(redirect_operator);
   operator->next = NULL;
-  if(tail != NULL) { 
+  if(*tail != NULL) { 
     (*tail)->next = operator; 
   }
   else {

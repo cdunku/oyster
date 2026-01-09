@@ -69,7 +69,7 @@ int main(void) {
     }
 
     str = getl();            
-    if (str == NULL) continue;    
+    if (str == NULL) { return 1; }  
     // Check whether if we have an unclosed string
     while(has_unclosed_quotes(str)) {
       printf("quote> ");
@@ -79,17 +79,17 @@ int main(void) {
       if(old_str == NULL) {
         fprintf(stderr, "Error: unexpected EOF when trying to reach end of quote\n");
         free(str);
-        continue;
+        return 1;
       }
       if(unclosed_string == NULL) {
         fprintf(stderr, "Error: unexpected EOF when trying to reach end of quote\n");
         free(old_str);
-        continue;
+        return 1;
       }
       str = join_unclosed_strings(old_str, unclosed_string);
       if(str == NULL) {
         fprintf(stderr, "Error: could not close the quotes\n");
-        continue;
+        return 1;
       }
     }
 

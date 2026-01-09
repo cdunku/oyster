@@ -245,6 +245,13 @@ void handle_pipes(Command *cmd, size_t cmd_count, int *status) {
   int pipes[number_of_pipes][2];
   pid_t pids[cmd_count];
 
+  for(size_t i = 0; i < cmd_count; i++) {
+    if(cmd[i].argc == 0 || cmd[i].argv == NULL || cmd[i].argv[0] == NULL) {
+      *status = 0;
+      return;
+    }
+  }
+
   for(size_t i = 0; i < number_of_pipes; i++) {
     if(pipe(pipes[i]) == -1) {
       fprintf(stderr, "Fatal: pipe failed to initialise\n");
@@ -367,6 +374,14 @@ ExecutionUnit *handle_parsed_units(Token *t, size_t *units_count) {
 int handle_exec_status(Pipeline* const pl) {
 
   int status = 0;
+
+  if(pl == NULL || pl->cmds_count == 0) {
+    return 0;
+  }
+
+  if(pl->cmds == NULL || pl->cmds[0].argv == NULL || pl->cmds[0].argv[0] == NULL) {
+    return 0;
+  }  
 
   if(strcmp(pl->cmds->argv[0], "exit") == 0) {
     fprintf(stdout, "oyster: Exiting shell\n");

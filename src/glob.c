@@ -8,8 +8,10 @@
 
 #include "tokenizer.h"
 
-// Helper functios
+// Helper functions
 
+
+// Helps create a substring for a directory after finding the last slash
 char *substring(const char *src, size_t start, size_t len) {
   char *dest = malloc(len + 1);
   if(dest == NULL) {
@@ -23,6 +25,8 @@ char *substring(const char *src, size_t start, size_t len) {
   return dest;
 }
 
+
+// Finds whether if a file fits a pattern
 bool glob_match(const char* pattern, const char* entry) {
   const char *p = pattern;
   const char *e = entry;
@@ -96,7 +100,7 @@ char **check_filesystem_for_glob(const char* glob_str, size_t *count) {
   // Open/Read/Close the retrieved directory.
   
   DIR *dir; // Helps us access the directory.
-  struct dirent *entry; // Stores the informations of directories and files.
+  struct dirent *entry; // Stores the information of directories and files.
 
   dir = opendir(directory);
   if(dir == NULL) {
@@ -220,12 +224,14 @@ void expand_glob_for_command(Pipeline *pl) {
 
   argv_[k] = NULL;
 
+  // Frees tbe old argv and other information
   for (size_t i = 0; i < cmd->argc; i++) {
     free(cmd->argv[i]);
   }
   free(cmd->argv);
   if(cmd->str_type != NULL) { free(cmd->str_type); }
 
+  // Assigns the new valaues to the string
   cmd->argv = argv_;
   cmd->argc = k;
   cmd->str_type = str_type_;
