@@ -36,7 +36,7 @@ It has served me as a learning tool on creating a minimal, but functional comman
 
 ### Parser improvements
 - Improve readability, maintainability and correctness.
-
+- The shell does not recognise `~` as /home/user/
 
 ## How to build and run?
 

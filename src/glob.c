@@ -7,6 +7,7 @@
 #include "glob.h"
 
 #include "tokenizer.h"
+#include "helper.h"
 
 // Helper functions
 
@@ -114,8 +115,8 @@ char **check_filesystem_for_glob(const char* glob_str, size_t *count) {
       capacity *= 2;
       char **matches_ = realloc(matches, capacity * sizeof(char *));
       if(matches_ == NULL) {
+        vector_free(matches, *count);
         fprintf(stderr, "Error: unable to allocate new matches\n");
-        free(matches);
         exit(EXIT_FAILURE);
       }
       matches = matches_;
