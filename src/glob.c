@@ -153,7 +153,7 @@ void expand_glob_for_command(Pipeline *pl) {
     fprintf(stderr, "Fatal: unable to allocate memory for glob vector\n");
     exit(EXIT_FAILURE);
   }
-  OperatorType *str_type_ = malloc(capacity * sizeof(OperatorType));
+  TokenType *str_type_ = malloc(capacity * sizeof(TokenType));
   if(str_type_ == NULL) {
     fprintf(stderr, "Fatal: unable to allocate memory for vector type\n");
     exit(EXIT_FAILURE);
@@ -174,7 +174,7 @@ void expand_glob_for_command(Pipeline *pl) {
 
         capacity *= 2;
         char **argv__ = realloc(argv_, capacity * sizeof(char *));
-        OperatorType *str_type__ = realloc(str_type_, capacity * sizeof(OperatorType));
+        TokenType *str_type__ = realloc(str_type_, capacity * sizeof(TokenType));
 
         if(argv__ == NULL || str_type__ == NULL) {
           fprintf(stderr, "Fatal: failed to reallocate memory to new argument vector\n");
@@ -191,7 +191,7 @@ void expand_glob_for_command(Pipeline *pl) {
           if(k + 1 >= capacity) {
             capacity *= 2;
             char **argv__ = realloc(argv_, capacity * sizeof(char *));
-            OperatorType *str_type__ = realloc(str_type_, capacity * sizeof(OperatorType));
+            TokenType* str_type__ = realloc(str_type_, capacity * sizeof(TokenType));
 
             if(argv__ == NULL || str_type__ == NULL) {
             fprintf(stderr, "Fatal: failed to reallocate memory to new argument vector\n");

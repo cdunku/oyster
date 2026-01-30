@@ -46,6 +46,10 @@ bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char
         *check_spec_ch = true;
         return true;
       }
+      else { 
+        *check_spec_ch = false;
+        return false;
+      }
     }
     default: { 
       operator[0] = '\0';
@@ -53,14 +57,11 @@ bool check_for_esc_and_spec_ch(const char *str, size_t i, size_t *consumed, char
       return false;
     }
   }
-  // If something goes wrong
-  *check_spec_ch = false;
-  return false;
 }
 
 bool check_for_quotes(const char ch, bool *double_quotes, char *quote) {
   switch (ch) {
-    case '"': *double_quotes = true;
+    case '"': *double_quotes = true; *quote = ch; return true;
     case '\'': *quote = ch; return true;
     
     default: return false;
@@ -78,6 +79,10 @@ bool check_for_redirector_operator(const char *str, size_t i, size_t *consumed, 
         operator[1] = '\0';
         *consumed = 0;
         return true;
+      }
+      else {
+        operator[0] = '\0';
+        return false;
       }
     }
     case '>': {
@@ -136,9 +141,10 @@ bool check_for_conditional_operator(const char *str, size_t i, size_t *consumed,
         *consumed = 1;
         return true;
       }
+      return false;
     }
     default: {
-      operator[0];
+      operator[0] = ch;
       return false;
     }
   }
@@ -504,6 +510,12 @@ bool handle_stream(Command *cmd, OperatorType operator, const char *filename) {
       s->stderr_append = false;
       return true;
     }
+    case OP_CONDITIONAL_AND:
+    case OP_CONDITIONAL_OR:
+    case OP_NONE:
+    case OP_PIPE: {
+      return false;
+    }
   }
   return false;
 }
@@ -626,7 +638,7 @@ Command *parse_cmds(Token *t, size_t *total_cmd) {
         exit(EXIT_FAILURE);
       }
 
-      OperatorType *str_type_ = realloc(cmd[current_cmd].str_type, argv_capacity * sizeof(OperatorType));
+      TokenType *str_type_ = realloc(cmd[current_cmd].str_type, argv_capacity * sizeof(TokenType));
       if(str_type_ == NULL) {
         fprintf(stderr, "Error: unable to reallocate memory to command type\n");
         vector_free(cmd[current_cmd].argv, i);

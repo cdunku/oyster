@@ -10,7 +10,6 @@
 #include "error.h"
 
 bool has_unclosed_quotes(const char *str) {
-  size_t i = 0;
   char save_quote = 0;
   size_t len = strlen(str);
 

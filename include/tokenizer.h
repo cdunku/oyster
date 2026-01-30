@@ -52,7 +52,7 @@ typedef struct Command {
 
   char **argv;
   size_t argc;
-  OperatorType *str_type;
+  TokenType *str_type;
 
   // Keeps track whether if a special character has occured.
   size_t special_ch_count;

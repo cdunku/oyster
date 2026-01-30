@@ -13,7 +13,7 @@ OBJS := $(SRCS:.c=.o)
 all: production
 
 # Production build 
-production: CFLAGS := -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $(STD) $(INCLUDES)
+production: CFLAGS := -g -O1 -fsanitize=address,undefined -Wall -Wextra -fno-omit-frame-pointer $(STD) $(INCLUDES)
 production: LDFLAGS := -fsanitize=address,undefined
 production: $(BIN)
 
