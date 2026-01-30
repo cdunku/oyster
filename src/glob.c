@@ -191,7 +191,7 @@ void expand_glob_for_command(Pipeline *pl) {
           if(k + 1 >= capacity) {
             capacity *= 2;
             char **argv__ = realloc(argv_, capacity * sizeof(char *));
-            TokenType* str_type__ = realloc(str_type_, capacity * sizeof(TokenType));
+            TokenType *str_type__ = realloc(str_type_, capacity * sizeof(TokenType));
 
             if(argv__ == NULL || str_type__ == NULL) {
             fprintf(stderr, "Fatal: failed to reallocate memory to new argument vector\n");
